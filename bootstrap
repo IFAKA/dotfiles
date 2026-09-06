@@ -1,0 +1,25 @@
+#!/usr/bin/env bash
+# Bootstrap a public dotfiles checkout and install both components.
+set -euo pipefail
+
+repo_url="${DOTFILES_REPO_URL:-https://github.com/IFAKA/dotfiles.git}"
+repo_dir="${DOTFILES_REPO_DIR:-$HOME/.local/share/dotfiles}"
+bin_dir="${DOTFILES_BIN_DIR:-$HOME/.local/bin}"
+
+if ! command -v git >/dev/null 2>&1; then
+  echo "Error: git is required to bootstrap dotfiles." >&2
+  exit 1
+fi
+
+mkdir -p "$(dirname "$repo_dir")" "$bin_dir"
+if [[ -d "$repo_dir/.git" ]]; then
+  git -C "$repo_dir" pull --ff-only
+elif [[ -e "$repo_dir" ]]; then
+  echo "Error: $repo_dir exists but is not a Git checkout." >&2
+  exit 1
+else
+  git clone "$repo_url" "$repo_dir"
+fi
+
+ln -sfn "$repo_dir/install" "$bin_dir/dotfiles"
+exec "$repo_dir/install" install "$@"

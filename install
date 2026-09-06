@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# Independent tmux and Neovim installer for macOS and Linux.
+set -euo pipefail
+
+script_dir=$(cd -P "$(dirname "$0")" && pwd)
+if [[ -f "$script_dir/tmux/tmux.conf" && -d "$script_dir/nvim" ]]; then
+  repo_dir="$script_dir"
+else
+  repo_dir="${DOTFILES_REPO_DIR:-$HOME/.local/share/dotfiles}"
+fi
+
+action=install
+component=all
+yes=false
+dry_run=false
+config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
+data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
+nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
+tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
+
+nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua)
+
+usage() {
+  cat <<'EOF'
+dotfiles — independent tmux and Neovim configuration
+
+Usage:
+  dotfiles [install|update|uninstall] [tmux|nvim] [--yes] [--dry-run]
+
+Actions:
+  install       Install both components (default)
+  update        Pull the checkout and reinstall the selected component
+  uninstall     Remove only managed files (with a backup)
+
+Options:
+  -y, --yes     Skip confirmation prompts
+  --dry-run     Show actions without changing files or installing packages
+  -h, --help    Show this help
+EOF
+}
+
+die() { echo "Error: $*" >&2; exit 1; }
+confirm() {
+  [[ "$yes" == true || "$dry_run" == true ]] && return 0
+  read -r -p "  $1 (y/N) " answer
+  [[ "$answer" =~ ^[Yy]$ ]]
+}
+selected() { [[ "$component" == all || "$component" == "$1" ]]; }
+
+install_packages() {
+  local os="$1"; local -a packages=()
+  if [[ "$(printenv DOTFILES_SKIP_PACKAGES || true)" == true ]]; then
+    echo "  Skipping OS package installation (DOTFILES_SKIP_PACKAGES=true)"
+    return
+  fi
+  if selected tmux && ! command -v tmux >/dev/null 2>&1; then packages+=(tmux); fi
+  if selected nvim; then
+    command -v nvim >/dev/null 2>&1 || packages+=(neovim)
+    command -v git >/dev/null 2>&1 || packages+=(git)
+    command -v node >/dev/null 2>&1 || packages+=(node)
+    command -v npm >/dev/null 2>&1 || packages+=(npm)
+    command -v rg >/dev/null 2>&1 || packages+=(ripgrep)
+    command -v lua-language-server >/dev/null 2>&1 || packages+=(lua-language-server)
+    command -v pyright-langserver >/dev/null 2>&1 || packages+=(pyright)
+    command -v gopls >/dev/null 2>&1 || packages+=(gopls)
+    if ! command -v clangd >/dev/null 2>&1; then
+      [[ "$os" == Darwin ]] && packages+=(llvm) || packages+=(clangd)
+    fi
+    command -v rust-analyzer >/dev/null 2>&1 || packages+=(rust-analyzer)
+  fi
+  [[ "$dry_run" == true ]] && { echo "  Would install packages: ${packages[*]:-none}"; return; }
+  ((${#packages[@]} == 0)) && return
+  if [[ "$os" == Darwin ]]; then
+    command -v brew >/dev/null 2>&1 || die "Homebrew is required to install missing tools: https://brew.sh"
+    brew install "${packages[@]}"
+  elif command -v apt-get >/dev/null 2>&1; then
+    sudo apt-get update -qq && sudo apt-get install -y "${packages[@]}"
+  elif command -v dnf >/dev/null 2>&1; then
+    sudo dnf install -y "${packages[@]}"
+  elif command -v pacman >/dev/null 2>&1; then
+    sudo pacman -Sy --noconfirm "${packages[@]}"
+  else
+    die "No supported package manager found; install manually: ${packages[*]}"
+  fi
+}
+
+install_language_servers() {
+  selected nvim || return 0
+  if [[ "$(printenv DOTFILES_SKIP_PACKAGES || true)" == true ]]; then
+    echo "  Skipping language-server installation (DOTFILES_SKIP_PACKAGES=true)"
+    return
+  fi
+  if [[ "$dry_run" == true ]]; then
+    echo "  Would install Neovim language servers in $data_root/npm"
+    return
+  fi
+  command -v npm >/dev/null 2>&1 || die "npm is required for Neovim language servers"
+  mkdir -p "$data_root/npm"
+  npm install --prefix "$data_root/npm" \
+    typescript@5.9.3 typescript-language-server vscode-langservers-extracted \
+    @tailwindcss/language-server
+}
+
+check_nvim() {
+  selected nvim || return 0
+  [[ "$dry_run" == true ]] && { echo "  Would verify Neovim 0.12+"; return; }
+  command -v nvim >/dev/null 2>&1 || die "Neovim 0.12+ was not found"
+  local version major minor
+  version=$(nvim --version | head -1 | sed -n 's/.*v\([0-9]*\.[0-9]*\).*/\1/p')
+  major=${version%%.*}; minor=${version#*.}
+  [[ -n "$version" && ( "$major" -gt 0 || "$minor" -ge 12 ) ]] || die "Neovim 0.12+ is required (found ${version:-unknown})"
+}
+
+copy_file() {
+  local source="$1" dest="$2" backup="$3"
+  if [[ -f "$dest" ]]; then
+    mkdir -p "$(dirname "$backup")"
+    cp -p "$dest" "$backup"
+  fi
+  mkdir -p "$(dirname "$dest")"
+  cp -p "$source" "$dest"
+}
+
+install_nvim() {
+  selected nvim || return 0
+  local dest backup file
+  dest="$config_root/nvim"
+  backup="$config_root/nvim.backup.$(date +%s)"
+  if [[ -d "$dest" && ! -f "$nvim_marker" ]]; then
+    confirm "Existing Neovim config found. Back up and install managed files?" || { echo "  Neovim installation cancelled."; return; }
+  fi
+  if [[ "$dry_run" == true ]]; then echo "  Would install Neovim into $dest"; return; fi
+  mkdir -p "$dest"
+  for file in "${nvim_files[@]}"; do copy_file "$repo_dir/nvim/$file" "$dest/$file" "$backup/$file"; done
+  printf 'dotfiles manages the Neovim files listed in install.\n' > "$nvim_marker"
+  echo "  Neovim installed (backup: $backup)"
+  nvim --headless +qa
+}
+
+install_tmux() {
+  selected tmux || return 0
+  local dest backup
+  dest="$config_root/tmux"
+  backup="$config_root/tmux.backup.$(date +%s)"
+  if [[ -f "$dest/tmux.conf" && ! -f "$tmux_marker" ]]; then
+    confirm "Existing tmux config found. Back up and replace it?" || { echo "  tmux installation cancelled."; return; }
+  fi
+  if [[ "$dry_run" == true ]]; then echo "  Would install tmux into $dest/tmux.conf"; return; fi
+  mkdir -p "$dest"
+  copy_file "$repo_dir/tmux/tmux.conf" "$dest/tmux.conf" "$backup/tmux.conf"
+  printf 'dotfiles manages tmux.conf.\n' > "$tmux_marker"
+  echo "  tmux installed (backup: $backup)"
+}
+
+uninstall_component() {
+  local kind="$1" dest backup file found=false
+  if [[ "$kind" == nvim ]]; then dest="$config_root/nvim"; backup="$config_root/nvim.uninstall-backup.$(date +%s)"; [[ -f "$nvim_marker" ]] || { echo "  Neovim is not managed; nothing removed."; return; }; fi
+  if [[ "$kind" == tmux ]]; then dest="$config_root/tmux"; backup="$config_root/tmux.uninstall-backup.$(date +%s)"; [[ -f "$tmux_marker" ]] || { echo "  tmux is not managed; nothing removed."; return; }; fi
+  confirm "Remove managed $kind files?" || return
+  if [[ "$dry_run" == true ]]; then echo "  Would remove managed $kind files from $dest"; return; fi
+  if [[ "$kind" == nvim ]]; then
+    for file in "${nvim_files[@]}"; do if [[ -f "$dest/$file" ]]; then mkdir -p "$(dirname "$backup/$file")"; cp -p "$dest/$file" "$backup/$file"; rm -f "$dest/$file"; found=true; fi; done
+    rm -f "$nvim_marker"
+  else
+    if [[ -f "$dest/tmux.conf" ]]; then mkdir -p "$backup"; cp -p "$dest/tmux.conf" "$backup/tmux.conf"; rm -f "$dest/tmux.conf"; found=true; fi
+    rm -f "$tmux_marker"
+  fi
+  [[ "$found" == true ]] && echo "  Removed managed $kind files (backup: $backup)"
+  rmdir "$dest" 2>/dev/null || true
+}
+
+update_checkout() {
+  [[ "$dry_run" == true ]] && { echo "  Would pull latest dotfiles checkout in $repo_dir"; return; }
+  [[ -d "$repo_dir/.git" ]] || die "$repo_dir is not a Git checkout"
+  git -C "$repo_dir" pull --ff-only
+}
+
+parse_args() {
+  local arg
+  for arg in "$@"; do
+    case "$arg" in
+      install|update|uninstall) action="$arg" ;;
+      tmux|nvim) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      -y|--yes) yes=true ;;
+      --dry-run) dry_run=true ;;
+      -h|--help) usage; exit 0 ;;
+      '') ;;
+      *) die "Unknown argument '$arg'. Run with --help." ;;
+    esac
+  done
+}
+
+parse_args "$@"
+[[ -d "$repo_dir/nvim" && -f "$repo_dir/tmux/tmux.conf" ]] || die "Invalid dotfiles checkout: $repo_dir"
+os=$(uname -s)
+[[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
+if [[ "$action" == update ]]; then update_checkout; fi
+if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; exit 0; fi
+install_packages "$os"
+check_nvim
+install_tmux
+install_nvim
+install_language_servers
+echo "dotfiles $action complete."
