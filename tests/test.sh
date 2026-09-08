@@ -37,11 +37,15 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓'
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ±'
-git -C "$git_repo" stash push -qm changed
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ stash:1'
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ~1'
+printf 'staged\n' > "$git_repo/staged.txt"
+git -C "$git_repo" add staged.txt
+printf 'untracked\n' > "$git_repo/untracked.txt"
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main +1 ~1 ?1'
+git -C "$git_repo" stash push -uqm changed
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ *1'
 git -C "$git_repo" checkout --detach -q
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ stash:1"
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ *1"
 assert_output "$("$repo_root/tmux/git-status.sh" "$test_home")" ''
 assert_output "$("$repo_root/tmux/program-name.sh" "$$")" 'bash'
 

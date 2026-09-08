@@ -13,13 +13,44 @@ if [[ -z "$branch" ]]; then
 fi
 [[ -n "$branch" ]] || exit 0
 
-if [[ -n "$(git -C "$directory" status --porcelain=v1 --untracked-files=normal 2>/dev/null)" ]]; then
-  state='±'
+branch_limit=24
+if (( ${#branch} > branch_limit )); then
+  branch="${branch:0:23}…"
+fi
+
+read -r staged unstaged untracked conflicts < <(
+  git -C "$directory" status --porcelain=v1 --untracked-files=normal 2>/dev/null |
+    awk '
+      /^\?\?/ { untracked++; next }
+      {
+        x = substr($0, 1, 1)
+        y = substr($0, 2, 1)
+        if (x == "U" || y == "U" || (x == "D" && y == "D") ||
+            (x == "A" && y == "A")) { conflicts++; next }
+        if (x != " ") staged++
+        if (y != " ") unstaged++
+      }
+      END { print staged + 0, unstaged + 0, untracked + 0, conflicts + 0 }
+    '
+)
+
+status="$branch"
+if (( staged + unstaged + untracked + conflicts == 0 )); then
+  status+=' ✓'
 else
-  state='✓'
+  (( conflicts > 0 )) && status+=" !${conflicts}"
+  (( staged > 0 )) && status+=" +${staged}"
+  (( unstaged > 0 )) && status+=" ~${unstaged}"
+  (( untracked > 0 )) && status+=" ?${untracked}"
+fi
+
+if git -C "$directory" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
+  divergence=$(git -C "$directory" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || printf '0 0')
+  read -r ahead behind <<< "$divergence"
+  (( ahead > 0 )) && status+=" ↑${ahead}"
+  (( behind > 0 )) && status+=" ↓${behind}"
 fi
 
 stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
-status="$branch $state"
-[[ "$stash_count" -gt 0 ]] && status+=" stash:$stash_count"
+(( stash_count > 0 )) && status+=" *${stash_count}"
 printf '%s\n' "$status"
