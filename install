@@ -17,6 +17,7 @@ config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
 data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
 nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
+tmux_files=(tmux.conf git-status.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua)
 
@@ -139,15 +140,17 @@ install_nvim() {
 
 install_tmux() {
   selected tmux || return 0
-  local dest backup
+  local dest backup file
   dest="$config_root/tmux"
   backup="$config_root/tmux.backup.$(date +%s)"
   if [[ -f "$dest/tmux.conf" && ! -f "$tmux_marker" ]]; then
     confirm "Existing tmux config found. Back up and replace it?" || { echo "  tmux installation cancelled."; return; }
   fi
-  if [[ "$dry_run" == true ]]; then echo "  Would install tmux into $dest/tmux.conf"; return; fi
+  if [[ "$dry_run" == true ]]; then echo "  Would install tmux into $dest"; return; fi
   mkdir -p "$dest"
-  copy_file "$repo_dir/tmux/tmux.conf" "$dest/tmux.conf" "$backup/tmux.conf"
+  for file in "${tmux_files[@]}"; do
+    copy_file "$repo_dir/tmux/$file" "$dest/$file" "$backup/$file"
+  done
   printf 'dotfiles manages tmux.conf.\n' > "$tmux_marker"
   echo "  tmux installed (backup: $backup)"
 }
@@ -162,7 +165,9 @@ uninstall_component() {
     for file in "${nvim_files[@]}"; do if [[ -f "$dest/$file" ]]; then mkdir -p "$(dirname "$backup/$file")"; cp -p "$dest/$file" "$backup/$file"; rm -f "$dest/$file"; found=true; fi; done
     rm -f "$nvim_marker"
   else
-    if [[ -f "$dest/tmux.conf" ]]; then mkdir -p "$backup"; cp -p "$dest/tmux.conf" "$backup/tmux.conf"; rm -f "$dest/tmux.conf"; found=true; fi
+    for file in "${tmux_files[@]}"; do
+      if [[ -f "$dest/$file" ]]; then mkdir -p "$backup"; cp -p "$dest/$file" "$backup/$file"; rm -f "$dest/$file"; found=true; fi
+    done
     rm -f "$tmux_marker"
   fi
   [[ "$found" == true ]] && echo "  Removed managed $kind files (backup: $backup)"

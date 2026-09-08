@@ -9,8 +9,10 @@ export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_file() { [[ -f "$1" ]] || fail "missing file: $1"; }
+assert_output() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
+bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 help=$("$repo_root/install" --help)
 grep -q 'Install both components' <<<"$help" || fail "help output"
 
@@ -19,8 +21,26 @@ grep -q 'Install both components' <<<"$help" || fail "help output"
 
 "$repo_root/install" install tmux --yes
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
+assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
 "$repo_root/install" install tmux --yes
+
+git_repo=$(mktemp -d "$test_home/git-repo.XXXXXX")
+git -C "$git_repo" init -q
+git -C "$git_repo" branch -M main
+git -C "$git_repo" config user.email test@example.com
+git -C "$git_repo" config user.name test
+printf 'tracked\n' > "$git_repo/tracked.txt"
+git -C "$git_repo" add tracked.txt
+git -C "$git_repo" commit -qm initial
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓'
+printf 'changed\n' >> "$git_repo/tracked.txt"
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ±'
+git -C "$git_repo" stash push -qm changed
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ stash:1'
+git -C "$git_repo" checkout --detach -q
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ stash:1"
+assert_output "$("$repo_root/tmux/git-status.sh" "$test_home")" ''
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
@@ -42,7 +62,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"
