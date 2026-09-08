@@ -17,7 +17,7 @@ config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
 data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
 nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
-tmux_files=(tmux.conf git-status.sh)
+tmux_files=(tmux.conf git-status.sh program-name.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua)
 

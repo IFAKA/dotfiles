@@ -13,6 +13,7 @@ assert_output() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
+bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 help=$("$repo_root/install" --help)
 grep -q 'Install both components' <<<"$help" || fail "help output"
 
@@ -22,6 +23,7 @@ grep -q 'Install both components' <<<"$help" || fail "help output"
 "$repo_root/install" install tmux --yes
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
 "$repo_root/install" install tmux --yes
 
@@ -41,6 +43,7 @@ assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ stash:1
 git -C "$git_repo" checkout --detach -q
 assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ stash:1"
 assert_output "$("$repo_root/tmux/git-status.sh" "$test_home")" ''
+assert_output "$("$repo_root/tmux/program-name.sh" "$$")" 'bash'
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
@@ -62,7 +65,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

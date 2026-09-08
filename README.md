@@ -34,3 +34,7 @@ pulling changes with:
 ```bash
 dotfiles install tmux --yes
 ```
+
+tmux also names windows from the application running in the active pane. The
+managed helper recognizes common applications and maps Codex's Node.js
+process to `Codex`; unknown applications use their executable name.
