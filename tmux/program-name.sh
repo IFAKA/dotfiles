@@ -44,4 +44,5 @@ find_application() {
   [[ -n "$command" ]] && label_for_command "$command"
 }
 
-find_application "$pane_pid"
+label=$(find_application "$pane_pid")
+printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/-/g'
