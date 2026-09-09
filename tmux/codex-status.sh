@@ -28,13 +28,10 @@ screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 recent=$(tail -n 25 <<<"$screen")
 current_prompt=$(tail -n 8 <<<"$screen" | grep -E '^[[:space:]]*›' | tail -n 1 || true)
 
-# The current prompt is authoritative. While the user is typing, leave the
-# tab clean; once Codex removes the prompt and starts a turn, activity text
-# below determines the loading state.
-if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
-  printf '✓\n'
-  exit 0
-elif [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] ]]; then
+# While the user is typing, leave the tab clean. The empty input prompt is
+# also rendered while Codex is working, so it must not take precedence over
+# confirmation, error, or activity text in the captured pane.
+if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
   exit 0
 fi
 
@@ -54,6 +51,10 @@ if grep -Eiq 'esc to interrupt|starting mcp servers|working|thinking|searching|r
   frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
   printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
   exit 0
+fi
+
+if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+  printf '✓\n'
 else
   printf '•\n'
 fi
