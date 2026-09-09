@@ -28,11 +28,11 @@ screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 [[ -n "$screen" ]] || exit 0
 recent=$(tail -n 12 <<<"$screen")
 current_prompt=$(tail -n 8 <<<"$screen" | grep -E '^[[:space:]]*›' | tail -n 1 || true)
-status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—✗!][[:space:]]' | tail -n 1 || true)
+status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—][[:space:]]' | tail -n 1 || true)
 
 # While the user is typing, leave the tab clean. The empty input prompt is
 # also rendered while Codex is working, so it must not take precedence over
-# confirmation, error, or activity text in the captured pane.
+# confirmation or activity text in the captured pane.
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
   exit 0
 fi
@@ -41,11 +41,6 @@ fi
 # makes ordinary words in Codex's explanations look like state changes.
 if grep -Eiq '^[[:space:]]*(Allow|Approve|Run this command|Would you like to|Continue)[^[:cntrl:]]*(\?|$)|^[[:space:]]*[\[(][Yy]/[Nn][\])]' <<<"$recent"; then
   printf '⚠\n'
-  exit 0
-fi
-
-if grep -Eiq '^[[:space:]]*[✗!][[:space:]]|^[[:space:]]*(Error|Failed|Failure|Exception|Traceback)(:|[[:space:]])' <<<"$status_line"; then
-  printf '!\n'
   exit 0
 fi
 
@@ -61,5 +56,5 @@ if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:sp
   [[ "$window_active" == 1 ]] && exit 0
   printf '✓\n'
 else
-  printf '•\n'
+  exit 0
 fi
