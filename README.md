@@ -35,7 +35,8 @@ pulling changes with:
 dotfiles install tmux --yes
 ```
 
-tmux also names windows from the application running in the active pane. The
-managed helper recognizes common applications and maps Codex's Node.js
-process to `Codex`; unknown applications use their executable name.
-Labels are normalized to lowercase, with spaces replaced by hyphens.
+tmux also names windows from the application running in the active pane. For a
+Codex pane, the managed helper looks up the active working directory in
+Codex's local session database and displays the conversation name, such as
+`codex: Show tmux session names`. Other recognized applications receive stable
+labels; unknown applications use their executable name.
