@@ -26,6 +26,7 @@ has_codex_process "$pane_pid" || exit 0
 screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 [[ -n "$screen" ]] || exit 0
 recent=$(tail -n 25 <<<"$screen")
+last_prompt=$(grep -E '^[[:space:]]*›' <<<"$screen" | tail -n 1 || true)
 
 # Confirmation takes precedence because Codex can leave progress text above it.
 if grep -Eiq 'allow|approve|confirmation required|run this command\?|continue\?|\[y/n\]|\(y/n\)' <<<"$recent"; then
@@ -38,14 +39,23 @@ if grep -Eiq 'error|failed|failure|exception|traceback' <<<"$recent"; then
   exit 0
 fi
 
+# The current prompt is more reliable than words left in scrollback. An empty
+# prompt means the turn is finished; text after it means the user is composing
+# a new turn and the completion check should disappear immediately.
+if [[ "$last_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+  printf '✓\n'
+  exit 0
+elif [[ "$last_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] ]]; then
+  frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+  printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
+  exit 0
+fi
+
 # These phrases are emitted by the Codex TUI while a turn or MCP tool is active.
 if grep -Eiq 'esc to interrupt|starting mcp servers|working|thinking|searching|reading|running|applying|exploring|implementing|testing|verifying' <<<"$recent"; then
   frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
   printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
   exit 0
-elif grep -Fq 'Ask Codex to do anything' <<<"$recent" || grep -Eq '^[[:space:]]*›' <<<"$recent"; then
-  # A visible input prompt means the turn is complete and ready for the next one.
-  printf '✓\n'
 else
   printf '•\n'
 fi
