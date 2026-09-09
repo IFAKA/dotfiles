@@ -26,7 +26,17 @@ has_codex_process "$pane_pid" || exit 0
 screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 [[ -n "$screen" ]] || exit 0
 recent=$(tail -n 25 <<<"$screen")
-last_prompt=$(grep -E '^[[:space:]]*›' <<<"$screen" | tail -n 1 || true)
+current_prompt=$(tail -n 8 <<<"$screen" | grep -E '^[[:space:]]*›' | tail -n 1 || true)
+
+# The current prompt is authoritative. While the user is typing, leave the
+# tab clean; once Codex removes the prompt and starts a turn, activity text
+# below determines the loading state.
+if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+  printf '✓\n'
+  exit 0
+elif [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] ]]; then
+  exit 0
+fi
 
 # Confirmation takes precedence because Codex can leave progress text above it.
 if grep -Eiq 'allow|approve|confirmation required|run this command\?|continue\?|\[y/n\]|\(y/n\)' <<<"$recent"; then
@@ -36,18 +46,6 @@ fi
 
 if grep -Eiq 'error|failed|failure|exception|traceback' <<<"$recent"; then
   printf '!\n'
-  exit 0
-fi
-
-# The current prompt is more reliable than words left in scrollback. An empty
-# prompt means the turn is finished; text after it means the user is composing
-# a new turn and the completion check should disappear immediately.
-if [[ "$last_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
-  printf '✓\n'
-  exit 0
-elif [[ "$last_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] ]]; then
-  frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-  printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
   exit 0
 fi
 
