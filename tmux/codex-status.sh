@@ -4,6 +4,7 @@ set -euo pipefail
 
 pane_id=${1:-}
 pane_pid=${2:-}
+window_active=${3:-0}
 [[ "$pane_id" =~ ^%[0-9]+$ ]] || exit 0
 [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
 
@@ -54,6 +55,7 @@ if grep -Eiq 'esc to interrupt|starting mcp servers|working|thinking|searching|r
 fi
 
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+  [[ "$window_active" == 1 ]] && exit 0
   printf '✓\n'
 else
   printf '•\n'

@@ -42,4 +42,5 @@ Codex's local session database and displays the conversation name, such as
 labels; unknown applications use their executable name. Codex windows also show
 a compact pane-state icon: an animated single-character Braille spinner while
 active, `⚠` when confirmation appears to be required, `✓` when ready for the
-next prompt, and `!` when an error is visible.
+next prompt in a background window, and `!` when an error is visible. The
+completion check disappears while you are viewing that window.
