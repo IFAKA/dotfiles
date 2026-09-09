@@ -14,6 +14,7 @@ assert_output() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
+bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 help=$("$repo_root/install" --help)
 grep -q 'Install both components' <<<"$help" || fail "help output"
 
@@ -24,6 +25,7 @@ grep -q 'Install both components' <<<"$help" || fail "help output"
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
 "$repo_root/install" install tmux --yes
 
@@ -69,7 +71,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

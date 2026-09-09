@@ -39,4 +39,7 @@ tmux also names windows from the application running in the active pane. For a
 Codex pane, the managed helper looks up the active working directory in
 Codex's local session database and displays the conversation name, such as
 `codex: Show tmux session names`. Other recognized applications receive stable
-labels; unknown applications use their executable name.
+labels; unknown applications use their executable name. Codex windows also show
+a compact pane-state icon: an animated dot while active, `⚠` when confirmation
+appears to be required, `✓` when ready for the next prompt, and `!` when an
+error is visible.
