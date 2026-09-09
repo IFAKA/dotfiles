@@ -26,8 +26,9 @@ has_codex_process "$pane_pid" || exit 0
 
 screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 [[ -n "$screen" ]] || exit 0
-recent=$(tail -n 25 <<<"$screen")
+recent=$(tail -n 12 <<<"$screen")
 current_prompt=$(tail -n 8 <<<"$screen" | grep -E '^[[:space:]]*›' | tail -n 1 || true)
+status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—✗!][[:space:]]' | tail -n 1 || true)
 
 # While the user is typing, leave the tab clean. The empty input prompt is
 # also rendered while Codex is working, so it must not take precedence over
@@ -36,19 +37,21 @@ if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$curre
   exit 0
 fi
 
-# Confirmation takes precedence because Codex can leave progress text above it.
-if grep -Eiq 'allow|approve|confirmation required|run this command\?|continue\?|\[y/n\]|\(y/n\)' <<<"$recent"; then
+# Only inspect the live prompt/status area. Searching the whole transcript
+# makes ordinary words in Codex's explanations look like state changes.
+if grep -Eiq '^[[:space:]]*(Allow|Approve|Run this command|Would you like to|Continue)[^[:cntrl:]]*(\?|$)|^[[:space:]]*[\[(][Yy]/[Nn][\])]' <<<"$recent"; then
   printf '⚠\n'
   exit 0
 fi
 
-if grep -Eiq 'error|failed|failure|exception|traceback' <<<"$recent"; then
+if grep -Eiq '^[[:space:]]*[✗!][[:space:]]|^[[:space:]]*(Error|Failed|Failure|Exception|Traceback)(:|[[:space:]])' <<<"$status_line"; then
   printf '!\n'
   exit 0
 fi
 
-# These phrases are emitted by the Codex TUI while a turn or MCP tool is active.
-if grep -Eiq 'esc to interrupt|starting mcp servers|working|thinking|searching|reading|running|applying|exploring|implementing|testing|verifying' <<<"$recent"; then
+# These phrases are emitted in the live status line while a turn or MCP tool
+# is active.
+if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
   frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
   printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
   exit 0
