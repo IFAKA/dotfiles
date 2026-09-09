@@ -40,7 +40,7 @@ fi
 
 # These phrases are emitted by the Codex TUI while a turn or MCP tool is active.
 if grep -Eiq 'esc to interrupt|starting mcp servers|working|thinking|searching|reading|running|applying|exploring|implementing|testing|verifying' <<<"$recent"; then
-  frames=('·' '••' '•••' '••')
+  frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
   printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
   exit 0
 elif grep -Fq 'Ask Codex to do anything' <<<"$recent" || grep -Eq '^[[:space:]]*›' <<<"$recent"; then
