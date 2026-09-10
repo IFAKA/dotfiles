@@ -82,8 +82,11 @@ if (( ${#files[@]} > 0 )); then
   printf '#[fg=colour250,bg=colour24]│'
   printf '#[fg=colour255,bg=colour238]'
   for index in "${!files[@]}"; do
-    (( index > 0 )) && printf ' #[fg=colour250,bg=colour238]│ #[fg=colour255,bg=colour238]'
-    printf ' %s ' "${files[index]}"
+    if (( index == 0 )); then
+      printf ' %s' "${files[index]}"
+    else
+      printf ' #[fg=colour250,bg=colour238]│#[fg=colour255,bg=colour238] %s' "${files[index]}"
+    fi
   done
 fi
 printf '#[default]\n'
