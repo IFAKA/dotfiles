@@ -79,7 +79,6 @@ stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
 # by a high-contrast vertical rule for quick scanning in the status line.
 printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
 if (( ${#files[@]} > 0 )); then
-  printf '#[fg=colour250,bg=colour24]│'
   printf '#[fg=colour255,bg=colour238]'
   for index in "${!files[@]}"; do
     if (( index == 0 )); then
