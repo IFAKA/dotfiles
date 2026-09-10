@@ -39,6 +39,7 @@ read -r staged unstaged untracked conflicts < <(
 status="$branch"
 files=()
 file_states=()
+overflow_index=-1
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   :
 else
@@ -69,11 +70,12 @@ else
     (( ${#files[@]} >= 3 )) && break
   done <<< "$git_status"
 
-  if (( ${#files[@]} > 0 )); then
+  if (( ${#files[@]} == 3 )); then
     changed_count=$(printf '%s\n' "$git_status" | awk 'NF { count++ } END { print count + 0 }')
-    if (( ${#files[@]} == 3 && changed_count > 3 )); then
-      files+=('…')
-      file_states+=(neutral)
+    if (( changed_count > 3 )); then
+      # Attach the overflow marker to the last visible filename instead of
+      # rendering a nameless marker between filenames.
+      overflow_index=2
     fi
   fi
 fi
@@ -143,10 +145,16 @@ if (( ${#files[@]} > 0 )); then
       printf ' #[fg=colour250,bg=colour238]│'
       printf '#[fg=colour%s,bg=colour238]' "$color"
       printf ' %s' "$filename"
+      if (( index == overflow_index )); then
+        printf '…'
+      fi
       continue
     fi
     printf '#[fg=colour%s,bg=colour238]' "$color"
     printf '%s' "$filename"
+    if (( index == overflow_index )); then
+      printf '…'
+    fi
   done
 fi
 printf '#[default]\n'

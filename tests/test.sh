@@ -49,13 +49,13 @@ printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?3 staged │ tracked │ fourth │ …'
+assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?3 staged │ tracked │ fourth…'
 git_status_raw=$($repo_root/tmux/git-status.sh "$git_repo")
 grep -q 'fg=colour114,bg=colour238.*staged' <<<"$git_status_raw" || fail "staged filename color missing"
 grep -q 'fg=colour221,bg=colour238.*tracked' <<<"$git_status_raw" || fail "unstaged filename color missing"
 printf 'typescript\n' > "$git_repo/index.ts"
 printf 'javascript\n' > "$git_repo/index.js"
-assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?5 staged │ tracked │ fourth │ …'
+assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?5 staged │ tracked │ fourth…'
 git_status_raw=$("$repo_root/tmux/git-status.sh" "$git_repo")
 grep -q 'fg=colour244,bg=colour238' <<<"$git_status_raw" || fail "untracked files are not muted"
 
