@@ -42,18 +42,26 @@ start_refresh_watcher() {
 
   local watcher_lock="$state_dir/.watcher.lock"
   mkdir "$watcher_lock" 2>/dev/null || return
-  (
-    trap 'rmdir "$watcher_lock" 2>/dev/null || true' EXIT
+  local state_file_q watcher_lock_q
+  printf -v state_file_q '%q' "$state_file"
+  printf -v watcher_lock_q '%q' "$watcher_lock"
+  tmux run-shell -b "
+    state_file=$state_file_q
+    watcher_lock=$watcher_lock_q
+    trap 'rmdir \"\$watcher_lock\" 2>/dev/null || true' EXIT
     while :; do
       watcher_notified=0
       watcher_busy=0
-      read -r watcher_notified watcher_busy < "$state_file" 2>/dev/null || exit 0
-      [[ "$watcher_busy" == 1 ]] || exit 0
-      tmux refresh-client -S 2>/dev/null || exit 0
+      read -r watcher_notified watcher_busy < "\$state_file" 2>/dev/null || exit 0
+      [[ "\$watcher_busy" == 1 ]] || exit 0
+      tmux list-clients -F '#{client_name}' 2>/dev/null |
+        while IFS= read -r client_name; do
+          tmux refresh-client -S -t "$client_name" 2>/dev/null || true
+        done
       sleep 0.1
     done
-  ) >/dev/null 2>&1 &
-  watcher_pid=$!
+  "
+  watcher_pid=0
   write_state
 }
 
