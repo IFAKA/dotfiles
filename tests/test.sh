@@ -50,6 +50,9 @@ mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
 assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?3 staged │ tracked │ fourth │ …'
+git_status_raw=$($repo_root/tmux/git-status.sh "$git_repo")
+grep -q 'fg=colour114,bg=colour238.*staged' <<<"$git_status_raw" || fail "staged filename color missing"
+grep -q 'fg=colour221,bg=colour238.*tracked' <<<"$git_status_raw" || fail "unstaged filename color missing"
 printf 'typescript\n' > "$git_repo/index.ts"
 printf 'javascript\n' > "$git_repo/index.js"
 assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?5 staged │ tracked │ fourth │ …'
@@ -66,6 +69,7 @@ printf 'javascript\n' > "$collision_repo/index.js"
 collision_status_raw=$("$repo_root/tmux/git-status.sh" "$collision_repo")
 grep -q 'index.ts' <<<"$collision_status_raw" || fail "collision extension missing"
 grep -q 'index.js' <<<"$collision_status_raw" || fail "collision extension missing"
+grep -q 'fg=colour244,bg=colour238.*index.ts' <<<"$collision_status_raw" || fail "untracked filename color missing"
 git -C "$git_repo" stash push -uqm changed
 assert_output "$(git_status_output "$git_repo")" 'main *1 '
 git -C "$git_repo" checkout --detach -q
