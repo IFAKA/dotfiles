@@ -10,6 +10,9 @@ export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_file() { [[ -f "$1" ]] || fail "missing file: $1"; }
 assert_output() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
+git_status_output() {
+  "$repo_root/tmux/git-status.sh" "$1" | sed -E 's/#\[[^]]*\]//g; s/^ //; s/  +/ /g'
+}
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
@@ -37,21 +40,21 @@ git -C "$git_repo" config user.name test
 printf 'tracked\n' > "$git_repo/tracked.txt"
 git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓'
+assert_output "$(git_status_output "$git_repo")" 'main ✓ '
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ~1 · tracked.txt'
+assert_output "$(git_status_output "$git_repo")" 'main ~1 │ tracked.txt '
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main +1 ~1 ?3 · staged.txt tracked.txt fourth.txt …'
+assert_output "$(git_status_output "$git_repo")" 'main +1 ~1 ?3 │ staged.txt │ tracked.txt │ fourth.txt │ … '
 git -C "$git_repo" stash push -uqm changed
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ *1'
+assert_output "$(git_status_output "$git_repo")" 'main ✓ *1 '
 git -C "$git_repo" checkout --detach -q
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ *1"
-assert_output "$("$repo_root/tmux/git-status.sh" "$test_home")" ''
+assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ *1 "
+assert_output "$(git_status_output "$test_home")" ''
 assert_output "$("$repo_root/tmux/program-name.sh" "$$")" 'bash'
 
 if command -v tmux >/dev/null 2>&1; then

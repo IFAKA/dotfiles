@@ -37,6 +37,7 @@ read -r staged unstaged untracked conflicts < <(
 )
 
 status="$branch"
+files=()
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   status+=' ✓'
 else
@@ -45,7 +46,6 @@ else
   (( unstaged > 0 )) && status+=" ~${unstaged}"
   (( untracked > 0 )) && status+=" ?${untracked}"
 
-  filenames=()
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
     path=${line:3}
@@ -54,17 +54,13 @@ else
     fi
     filename=${path##*/}
     [[ -n "$filename" ]] || continue
-    filenames+=("$filename")
-    (( ${#filenames[@]} >= 3 )) && break
+    files+=("$filename")
+    (( ${#files[@]} >= 3 )) && break
   done <<< "$git_status"
 
-  if (( ${#filenames[@]} > 0 )); then
-    status+=' ·'
-    for filename in "${filenames[@]}"; do
-      status+=" $filename"
-    done
+  if (( ${#files[@]} > 0 )); then
     changed_count=$(printf '%s\n' "$git_status" | awk 'NF { count++ } END { print count + 0 }')
-    (( ${#filenames[@]} == 3 && changed_count > 3 )) && status+=' …'
+    (( ${#files[@]} == 3 && changed_count > 3 )) && files+=('…')
   fi
 fi
 
@@ -77,4 +73,17 @@ fi
 
 stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
 (( stash_count > 0 )) && status+=" *${stash_count}"
-printf '%s\n' "$status"
+
+# Keep the branch/status group visually separate from the changed-file group.
+# The file group uses a contrasting background, while each filename is split
+# by a high-contrast vertical rule for quick scanning in the status line.
+printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
+if (( ${#files[@]} > 0 )); then
+  printf '#[fg=colour250,bg=colour24]│'
+  printf '#[fg=colour255,bg=colour238]'
+  for index in "${!files[@]}"; do
+    (( index > 0 )) && printf ' #[fg=colour250,bg=colour238]│ #[fg=colour255,bg=colour238]'
+    printf ' %s ' "${files[index]}"
+  done
+fi
+printf '#[default]\n'
