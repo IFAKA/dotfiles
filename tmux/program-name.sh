@@ -33,7 +33,7 @@ codex_session_label() {
     "SELECT name FROM threads WHERE cwd = '$path_sql' AND archived = 0 AND name <> '' ORDER BY updated_at_ms DESC, updated_at DESC LIMIT 1;" \
     2>/dev/null) || return 1
   [[ -n "$name" ]] || return 1
-  printf 'codex: %s\n' "$name"
+  printf '✦ %s\n' "$name"
 }
 
 clean_codex_title() {
@@ -54,9 +54,9 @@ find_application() {
     *[Cc]odex*)
       cleaned_title=$(clean_codex_title)
       if [[ -n "$cleaned_title" ]]; then
-        printf 'codex: %s\n' "$cleaned_title"
+        printf '✦ %s\n' "$cleaned_title"
       else
-        codex_session_label || echo "Codex"
+        codex_session_label || echo "✦ Codex"
       fi
       return 0
       ;;
@@ -80,7 +80,7 @@ find_application() {
 }
 
 label=$(find_application "$pane_pid")
-if [[ "$label" == codex:* ]]; then
+if [[ "$label" == ✦* ]]; then
   printf '%s\n' "$label" | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]+$//'
 else
   printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/-/g'

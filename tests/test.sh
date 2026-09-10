@@ -81,9 +81,10 @@ if [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123 "$git_repo" 'First conversation')" 'codex: First conversation'
-assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" 'codex: Second conversation'
-assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" 'codex: First conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123 "$git_repo" 'First conversation')" '✦ First conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" '✦ Second conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" '✦ First conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" '✦ Codex'
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
 
 if command -v tmux >/dev/null 2>&1; then
