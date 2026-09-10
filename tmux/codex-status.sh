@@ -41,7 +41,7 @@ start_refresh_watcher() {
   fi
 
   local watcher_lock="$state_dir/.watcher.lock"
-  mkdir "$watcher_lock" 2>/dev/null || return
+  mkdir "$watcher_lock" 2>/dev/null || return 0
   local state_file_q watcher_lock_q
   printf -v state_file_q '%q' "$state_file"
   printf -v watcher_lock_q '%q' "$watcher_lock"
