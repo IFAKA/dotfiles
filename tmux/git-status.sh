@@ -40,7 +40,7 @@ status="$branch"
 files=()
 file_untracked=()
 if (( staged + unstaged + untracked + conflicts == 0 )); then
-  status+=' ✓'
+  :
 else
   (( conflicts > 0 )) && status+=" !${conflicts}"
   (( staged > 0 )) && status+=" +${staged}"

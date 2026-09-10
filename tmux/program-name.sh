@@ -4,6 +4,7 @@ set -euo pipefail
 
 pane_pid=${1:-}
 pane_path=${2:-}
+pane_title=${3:-}
 [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
 
 process_command() {
@@ -35,12 +36,30 @@ codex_session_label() {
   printf 'codex: %s\n' "$name"
 }
 
+clean_codex_title() {
+  local title="$pane_title" pane_name
+  title=$(sed -E 's/^[⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏][[:space:]]+//' <<<"$title")
+  pane_name=${pane_path##*/}
+  if [[ -n "$pane_name" && "$title" == *" | $pane_name" ]]; then
+    title=${title%" | $pane_name"}
+  fi
+  [[ -n "$title" ]] && printf '%s' "$title"
+}
+
 find_application() {
-  local pid="$1" command child result
+  local pid="$1" command child result cleaned_title
   command=$(process_command "$pid")
 
   case "$command" in
-    *[Cc]odex*) codex_session_label || echo "Codex"; return 0 ;;
+    *[Cc]odex*)
+      cleaned_title=$(clean_codex_title)
+      if [[ -n "$cleaned_title" ]]; then
+        printf 'codex: %s\n' "$cleaned_title"
+      else
+        codex_session_label || echo "Codex"
+      fi
+      return 0
+      ;;
     *nvim*|*neovim*) echo "nvim"; return 0 ;;
     *vim*) echo "vim"; return 0 ;;
     *lazygit*) echo "lazygit"; return 0 ;;

@@ -40,7 +40,7 @@ git -C "$git_repo" config user.name test
 printf 'tracked\n' > "$git_repo/tracked.txt"
 git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
-assert_output "$(git_status_output "$git_repo")" 'main ✓ '
+assert_output "$(git_status_output "$git_repo")" 'main '
 printf 'changed\n' >> "$git_repo/tracked.txt"
 assert_output "$(git_status_output "$git_repo")" 'main ~1 tracked'
 printf 'staged\n' > "$git_repo/staged.txt"
@@ -67,11 +67,23 @@ collision_status_raw=$("$repo_root/tmux/git-status.sh" "$collision_repo")
 grep -q 'index.ts' <<<"$collision_status_raw" || fail "collision extension missing"
 grep -q 'index.js' <<<"$collision_status_raw" || fail "collision extension missing"
 git -C "$git_repo" stash push -uqm changed
-assert_output "$(git_status_output "$git_repo")" 'main ✓ *1 '
+assert_output "$(git_status_output "$git_repo")" 'main *1 '
 git -C "$git_repo" checkout --detach -q
-assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) ✓ *1 "
+assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) *1 "
 assert_output "$(git_status_output "$test_home")" ''
 assert_output "$("$repo_root/tmux/program-name.sh" "$$")" 'bash'
+
+fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
+cat > "$fake_bin/ps" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$1" == '-o' && "$2" == 'command=' ]]; then
+  echo 'node /fake/path/codex'
+fi
+EOF
+chmod +x "$fake_bin/ps"
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123 "$git_repo" 'First conversation')" 'codex: First conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" 'codex: Second conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" 'codex: First conversation'
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
