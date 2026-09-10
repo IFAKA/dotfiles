@@ -17,18 +17,44 @@ mkdir -p "$state_dir"
 read_state() {
   notified=0
   busy=0
+  watcher_pid=0
+  frame=0
   if [[ -f "$state_file" ]]; then
-    read -r notified busy < "$state_file" || true
+    read -r notified busy watcher_pid frame < "$state_file" || true
     [[ "$notified" =~ ^[01]$ ]] || notified=0
     [[ "$busy" =~ ^[01]$ ]] || busy=0
+    [[ "$watcher_pid" =~ ^[0-9]+$ ]] || watcher_pid=0
+    [[ "$frame" =~ ^[0-9]+$ ]] || frame=0
   fi
 }
 
 write_state() {
   local temporary
   temporary=$(mktemp "$state_dir/.state.XXXXXX")
-  printf '%s %s\n' "$notified" "$busy" >"$temporary"
+  printf '%s %s %s %s\n' "$notified" "$busy" "$watcher_pid" "$frame" >"$temporary"
   mv -f "$temporary" "$state_file"
+}
+
+start_refresh_watcher() {
+  if [[ "$watcher_pid" =~ ^[1-9][0-9]*$ ]] && kill -0 "$watcher_pid" 2>/dev/null; then
+    return
+  fi
+
+  local watcher_lock="$state_dir/.watcher.lock"
+  mkdir "$watcher_lock" 2>/dev/null || return
+  (
+    trap 'rmdir "$watcher_lock" 2>/dev/null || true' EXIT
+    while :; do
+      watcher_notified=0
+      watcher_busy=0
+      read -r watcher_notified watcher_busy < "$state_file" 2>/dev/null || exit 0
+      [[ "$watcher_busy" == 1 ]] || exit 0
+      tmux refresh-client -S 2>/dev/null || exit 0
+      sleep 0.1
+    done
+  ) >/dev/null 2>&1 &
+  watcher_pid=$!
+  write_state
 }
 
 read_state
@@ -69,6 +95,7 @@ status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—][[:space
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
   busy=1
   write_state
+  start_refresh_watcher
   exit 0
 fi
 
@@ -85,9 +112,11 @@ fi
 # is active.
 if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
   busy=1
-  write_state
   frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
-  printf '%s\n' "${frames[$(( $(date +%s) % ${#frames[@]} ))]}"
+  frame=$(( (frame + 1) % ${#frames[@]} ))
+  write_state
+  start_refresh_watcher
+  printf '%s\n' "${frames[$frame]}"
   exit 0
 fi
 
