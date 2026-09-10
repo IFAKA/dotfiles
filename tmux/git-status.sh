@@ -38,6 +38,7 @@ read -r staged unstaged untracked conflicts < <(
 
 status="$branch"
 files=()
+file_untracked=()
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   status+=' ✓'
 else
@@ -55,6 +56,7 @@ else
     filename=${path##*/}
     [[ -n "$filename" ]] || continue
     files+=("$filename")
+    [[ ${line:0:2} == '??' ]] && file_untracked+=(1) || file_untracked+=(0)
     (( ${#files[@]} >= 3 )) && break
   done <<< "$git_status"
 
@@ -81,11 +83,52 @@ printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
 if (( ${#files[@]} > 0 )); then
   printf '#[fg=colour255,bg=colour238]'
   for index in "${!files[@]}"; do
-    if (( index == 0 )); then
-      printf ' %s' "${files[index]}"
-    else
-      printf ' #[fg=colour250,bg=colour238]│#[fg=colour255,bg=colour238] %s' "${files[index]}"
+    filename=${files[index]}
+    stem=$filename
+    if [[ "$filename" == *.* && "$filename" != .* ]]; then
+      stem=${filename%.*}
+    elif [[ "$filename" == .*.* ]]; then
+      stem=${filename%.*}
     fi
+
+    show_extension=0
+    for other_index in "${!files[@]}"; do
+      [[ "$other_index" == "$index" ]] && continue
+      other=${files[other_index]}
+      other_stem=$other
+      if [[ "$other" == *.* && "$other" != .* ]]; then
+        other_stem=${other%.*}
+      elif [[ "$other" == .*.* ]]; then
+        other_stem=${other%.*}
+      fi
+      if [[ "$stem" == "$other_stem" ]]; then
+        show_extension=1
+        break
+      fi
+    done
+
+    if [[ "$filename" == *.* ]] && (( show_extension == 0 )); then
+      filename=${filename%.*}
+    fi
+
+    if (( index == 0 )); then
+      printf ' '
+    else
+      printf ' #[fg=colour250,bg=colour238]│'
+      if (( file_untracked[index] == 1 )); then
+        printf '#[fg=colour244,bg=colour238]'
+      else
+        printf '#[fg=colour255,bg=colour238]'
+      fi
+      printf ' %s' "$filename"
+      continue
+    fi
+    if (( file_untracked[index] == 1 )); then
+      printf '#[fg=colour244,bg=colour238]'
+    else
+      printf '#[fg=colour255,bg=colour238]'
+    fi
+    printf '%s' "$filename"
   done
 fi
 printf '#[default]\n'
