@@ -28,8 +28,9 @@ Neovim does not require tmux.
 
 tmux shows Git information for the active pane's working directory in the
 right side of the status bar. It displays the branch (or detached commit), a
-clean/dirty marker, and the stash count when one exists. Reinstall after
-pulling changes with:
+clean/dirty marker, compact change counts, and up to three changed filenames
+without their paths when the worktree is dirty. The stash count is shown when
+one exists. Reinstall after pulling changes with:
 
 ```bash
 dotfiles install tmux --yes

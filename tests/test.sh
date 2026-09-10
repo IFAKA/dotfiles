@@ -39,11 +39,14 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓'
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ~1'
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ~1 · tracked.txt'
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
-assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main +1 ~1 ?1'
+mkdir -p "$git_repo/nested"
+printf 'nested\n' > "$git_repo/nested/inner.txt"
+printf 'fourth\n' > "$git_repo/fourth.txt"
+assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main +1 ~1 ?3 · staged.txt tracked.txt fourth.txt …'
 git -C "$git_repo" stash push -uqm changed
 assert_output "$("$repo_root/tmux/git-status.sh" "$git_repo")" 'main ✓ *1'
 git -C "$git_repo" checkout --detach -q
