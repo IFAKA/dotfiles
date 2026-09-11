@@ -10,17 +10,75 @@ local function project_root()
   return projects.root_or_cwd()
 end
 
+local function select_items(items, opts, callback)
+  if #items == 0 then
+    vim.notify(opts.empty_message or "No matches", vim.log.levels.WARN)
+    return
+  end
+  vim.ui.select(items, opts, callback)
+end
+
+local function open_file(path)
+  vim.cmd("edit " .. vim.fn.fnameescape(path))
+end
+
 local function files()
-  MiniPick.builtin.files({ tool = "git" })
+  local root = project_root()
+  local command = vim.fn.executable("git") == 1 and {
+    "git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard",
+  } or { "find", root, "-type", "f" }
+  vim.system(command, { text = true }, function(result)
+    vim.schedule(function()
+      local items = vim.split(result.stdout or "", "\n", { trimempty = true })
+      if command[1] == "find" then
+        items = vim.tbl_map(function(path) return path:sub(#root + 2) end, items)
+      end
+      select_items(items, { prompt = "Find file", empty_message = "No project files found" }, function(item)
+        if item then open_file(root .. "/" .. item) end
+      end)
+    end)
+  end)
 end
 
 local function grep()
-  MiniPick.builtin.grep_live()
+  vim.ui.input({ prompt = "Grep pattern: " }, function(pattern)
+    if not pattern or pattern == "" then return end
+    local root = project_root()
+    local command = { "rg", "--line-number", "--no-heading", "--color", "never", pattern, root }
+    vim.system(command, { text = true }, function(result)
+      vim.schedule(function()
+        local items = vim.split(result.stdout or "", "\n", { trimempty = true })
+        select_items(items, { prompt = "Grep results", empty_message = "No matches" }, function(item)
+          if not item then return end
+          local filename, line, column = item:match("^(.-):(%d+):(%d+):")
+          if not filename then filename, line = item:match("^(.-):(%d+):") end
+          if filename then
+            open_file(filename)
+            vim.api.nvim_win_set_cursor(0, { tonumber(line), math.max(tonumber(column or 1) - 1, 0) })
+          end
+        end)
+      end)
+    end)
+  end)
 end
 
-local function buffers() MiniPick.builtin.buffers() end
+local function buffers()
+  local items = {}
+  for _, bufnr in ipairs(vim.api.nvim_list_bufs()) do
+    if vim.api.nvim_buf_is_loaded(bufnr) and vim.api.nvim_buf_get_name(bufnr) ~= "" then
+      table.insert(items, { bufnr = bufnr, name = vim.api.nvim_buf_get_name(bufnr) })
+    end
+  end
+  select_items(items, { prompt = "Buffers", format_item = function(item) return item.name end }, function(item)
+    if item then vim.api.nvim_set_current_buf(item.bufnr) end
+  end)
+end
+
 local function recent_files()
-  MiniPick.start({ source = { items = vim.v.oldfiles, name = "Recent files" } })
+  local items = vim.tbl_filter(function(path) return vim.fn.filereadable(path) == 1 end, vim.v.oldfiles or {})
+  select_items(items, { prompt = "Recent files", empty_message = "No recent files" }, function(item)
+    if item then open_file(item) end
+  end)
 end
 local git_command
 
@@ -68,13 +126,21 @@ local function select_commits()
   vim.ui.select(lines, { prompt = "Git commits" }, function(line)
     if not line then return end
     local sha = line:match("^(%S+)")
-    if sha then git_command("show " .. sha) end
+    if sha then git_command({ "show", sha }) end
   end)
 end
 
-git_command = function(command)
-  vim.cmd("botright split | terminal git " .. command)
+git_command = function(args)
+  vim.cmd("botright split")
+  vim.fn.termopen(vim.list_extend({ "git" }, args))
   vim.cmd("startinsert")
+end
+
+local function show_help()
+  local tags = vim.fn.getcompletion("", "help")
+  select_items(tags, { prompt = "Help", empty_message = "No help tags" }, function(tag)
+    if tag then vim.cmd("help " .. tag) end
+  end)
 end
 
 local function copy_project_path()
@@ -174,18 +240,21 @@ map("<leader>rl", tasks.rerun, "Rerun last task")
 map("<leader>rq", tasks.open_quickfix, "Open task quickfix")
 map("<leader>cd", vim.diagnostic.open_float, "Line diagnostics")
 map("<leader>cs", lsp_cmd(vim.lsp.buf.document_symbol), "Document symbols")
-map("<leader>gf", function() git_command("ls-files") end, "Git files")
-map("<leader>gs", function() git_command("status") end, "Git status")
+map("<leader>gf", function() git_command({ "ls-files" }) end, "Git files")
+map("<leader>gs", function() git_command({ "status" }) end, "Git status")
 map("<leader>gc", select_commits, "Find Git commits")
-map("<leader>gp", "<cmd>Gitsigns preview_hunk<cr>", "Preview hunk")
-map("<leader>ga", "<cmd>Gitsigns stage_hunk<cr>", "Stage hunk")
-map("<leader>gr", "<cmd>Gitsigns reset_hunk<cr>", "Reset hunk")
-map("<leader>gb", "<cmd>Gitsigns blame_line<cr>", "Blame line")
-map("<leader>sh", function() MiniPick.builtin.help() end, "Find help")
+map("<leader>gp", function() git_command({ "diff", "--", vim.api.nvim_buf_get_name(0) }) end, "Preview file diff")
+map("<leader>ga", function() git_command({ "add", "-p", "--", vim.api.nvim_buf_get_name(0) }) end, "Stage file hunk")
+map("<leader>gr", function() git_command({ "restore", "-p", "--", vim.api.nvim_buf_get_name(0) }) end, "Reset file hunk")
+map("<leader>gb", function()
+  local line = vim.api.nvim_win_get_cursor(0)[1]
+  git_command({ "blame", "-L", string.format("%d,%d", line, line), "--", vim.api.nvim_buf_get_name(0) })
+end, "Blame current line")
+map("<leader>sh", show_help, "Find help")
 map("<leader>sk", "<cmd>map<cr>", "Show keymaps")
 map("<leader>sc", select_commands, "Find commands")
 map("<leader>sd", select_diagnostics, "Find diagnostics")
-map("<leader>?", function() MiniPick.builtin.help({}) end, "Find help")
+map("<leader>?", show_help, "Find help")
 map("<leader>db", dap_action("toggle_breakpoint"), "Debug breakpoint")
 map("<leader>dB", function() require("vimzap.debug").setup(); require("dap").set_breakpoint(vim.fn.input("Condition: ")) end, "Debug conditional breakpoint")
 map("<leader>dc", dap_action("continue"), "Debug continue/start")
@@ -213,8 +282,8 @@ map("[e", function() vim.diagnostic.jump({ count = -1, severity = vim.diagnostic
 map("]e", function() vim.diagnostic.jump({ count = 1, severity = vim.diagnostic.severity.ERROR }) end, "Next error")
 map("[q", "<cmd>cprevious<cr>", "Previous task error")
 map("]q", "<cmd>cnext<cr>", "Next task error")
-map("[h", "<cmd>Gitsigns nav_hunk prev<cr>", "Previous hunk")
-map("]h", "<cmd>Gitsigns nav_hunk next<cr>", "Next hunk")
+map("[h", "[c", "Previous hunk")
+map("]h", "]c", "Next hunk")
 map("<S-h>", "<cmd>bprevious<cr>", "Previous buffer")
 map("<S-l>", "<cmd>bnext<cr>", "Next buffer")
 map("<leader>bd", "<cmd>bdelete<cr>", "Delete buffer")
@@ -222,19 +291,6 @@ map("<leader>bo", "<cmd>%bd|e#|bd#<cr>", "Close other buffers")
 map("<C-/>", toggle_terminal, "Terminal", { "n", "t" })
 map("<C-_>", toggle_terminal, "Terminal", { "n", "t" })
 map("<C-Space>", function() vim.lsp.completion.get() end, "Trigger LSP completion", "i")
-
-local which_key_ok, which_key = pcall(require, "which-key")
-if which_key_ok then
-  which_key.add({
-    { "<leader>f", group = "Find / files" },
-    { "<leader>c", group = "Code" },
-    { "<leader>r", group = "Run / tasks" },
-    { "<leader>d", group = "Debug" },
-    { "<leader>g", group = "Git" },
-    { "<leader>p", group = "Prophet / SFCC" },
-    { "<leader>s", group = "Search / help" },
-  })
-end
 
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)

@@ -61,7 +61,7 @@ local function open_dashboard()
   map("t", "<cmd>VimZapTasks<cr>", "Project tasks")
   map("s", "<leader>gs", "Git status")
   map("T", "<cmd>VimZapTerminalToggle<cr>", "Terminal")
-  map("?", function() MiniPick.builtin.help({}) end, "Help")
+  map("?", "<leader>sh", "Help")
   map("q", "<cmd>quit<cr>", "Quit")
 
   M.refresh_git(buf, git_line)

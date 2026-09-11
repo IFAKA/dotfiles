@@ -1,11 +1,5 @@
 -- LSP configuration and activation.
--- nvim-lspconfig supplies server defaults; Neovim owns the client.
-
--- Keep the repository's npm tools self-contained and available to exepath().
-local dotfiles_npm_bin = vim.fn.expand("~/.local/share/dotfiles/npm/bin")
-if vim.fn.isdirectory(dotfiles_npm_bin) == 1 then
-  vim.env.PATH = dotfiles_npm_bin .. ":" .. vim.env.PATH
-end
+-- Server definitions live in local lsp/*.lua files; Neovim owns the client.
 
 local typescript_language_server = vim.fn.exepath("typescript-language-server")
 local node_command = vim.fn.exepath("node")
