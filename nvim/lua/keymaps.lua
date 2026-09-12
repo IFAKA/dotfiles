@@ -23,43 +23,11 @@ local function open_file(path)
 end
 
 local function files()
-  local root = project_root()
-  local command = vim.fn.executable("git") == 1 and {
-    "git", "-C", root, "ls-files", "--cached", "--others", "--exclude-standard",
-  } or { "find", root, "-type", "f" }
-  vim.system(command, { text = true }, function(result)
-    vim.schedule(function()
-      local items = vim.split(result.stdout or "", "\n", { trimempty = true })
-      if command[1] == "find" then
-        items = vim.tbl_map(function(path) return path:sub(#root + 2) end, items)
-      end
-      select_items(items, { prompt = "Find file", empty_message = "No project files found" }, function(item)
-        if item then open_file(root .. "/" .. item) end
-      end)
-    end)
-  end)
+  MiniPick.builtin.files({ tool = "git" })
 end
 
 local function grep()
-  vim.ui.input({ prompt = "Grep pattern: " }, function(pattern)
-    if not pattern or pattern == "" then return end
-    local root = project_root()
-    local command = { "rg", "--line-number", "--no-heading", "--color", "never", pattern, root }
-    vim.system(command, { text = true }, function(result)
-      vim.schedule(function()
-        local items = vim.split(result.stdout or "", "\n", { trimempty = true })
-        select_items(items, { prompt = "Grep results", empty_message = "No matches" }, function(item)
-          if not item then return end
-          local filename, line, column = item:match("^(.-):(%d+):(%d+):")
-          if not filename then filename, line = item:match("^(.-):(%d+):") end
-          if filename then
-            open_file(filename)
-            vim.api.nvim_win_set_cursor(0, { tonumber(line), math.max(tonumber(column or 1) - 1, 0) })
-          end
-        end)
-      end)
-    end)
-  end)
+  MiniPick.builtin.grep_live()
 end
 
 local function buffers()
@@ -75,10 +43,17 @@ local function buffers()
 end
 
 local function recent_files()
-  local items = vim.tbl_filter(function(path) return vim.fn.filereadable(path) == 1 end, vim.v.oldfiles or {})
-  select_items(items, { prompt = "Recent files", empty_message = "No recent files" }, function(item)
-    if item then open_file(item) end
-  end)
+  MiniPick.start({
+    source = {
+      items = vim.tbl_filter(function(path) return vim.fn.filereadable(path) == 1 end, vim.v.oldfiles or {}),
+      name = "Recent files",
+      choose = function(path)
+        local root = projects.root(path)
+        if root then vim.api.nvim_set_current_dir(root) end
+        open_file(path)
+      end,
+    },
+  })
 end
 local git_command
 

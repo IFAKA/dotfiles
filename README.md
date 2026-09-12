@@ -48,3 +48,6 @@ a compact pane-state icon: an animated single-character Braille spinner while
 active, `⚠` when confirmation appears to be required, `✓` when ready for the
 next prompt in a background window, and nothing when there is no active state.
 The completion check disappears while you are viewing that window.
+The managed Neovim setup includes native startup navigation plus `mini.pick`
+for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
+jump motions.
