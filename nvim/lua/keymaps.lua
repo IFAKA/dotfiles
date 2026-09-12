@@ -292,6 +292,19 @@ map("<C-/>", toggle_terminal, "Terminal", { "n", "t" })
 map("<C-_>", toggle_terminal, "Terminal", { "n", "t" })
 map("<C-Space>", function() vim.lsp.completion.get() end, "Trigger LSP completion", "i")
 
+local which_key_ok, which_key = pcall(require, "which-key")
+if which_key_ok then
+  which_key.add({
+    { "<leader>f", group = "Find / files" },
+    { "<leader>c", group = "Code" },
+    { "<leader>r", group = "Run / tasks" },
+    { "<leader>d", group = "Debug" },
+    { "<leader>g", group = "Git" },
+    { "<leader>p", group = "Prophet / SFCC" },
+    { "<leader>s", group = "Search / help" },
+  })
+end
+
 vim.api.nvim_create_autocmd("LspAttach", {
   callback = function(args)
     local client = assert(vim.lsp.get_client_by_id(args.data.client_id))
