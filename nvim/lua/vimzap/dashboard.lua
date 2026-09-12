@@ -13,8 +13,8 @@ local function open_dashboard()
     if #recent == 0 then
       table.insert(lines, "  No recent projects found.")
     else
-      for index, root in ipairs(recent) do
-        table.insert(lines, string.format("  %d  %s", index, root))
+      for _, root in ipairs(recent) do
+        table.insert(lines, "  " .. root)
       end
     end
     table.insert(lines, "")
@@ -22,12 +22,10 @@ local function open_dashboard()
     table.insert(lines, "  Git Status  " .. (status or "Loading..."))
     table.insert(lines, "")
     table.insert(lines, "  Actions")
-    table.insert(lines, "  f  Find files       g  Grep project")
-    table.insert(lines, "  r  Recent files     b  Buffers")
-    table.insert(lines, "  t  Project tasks    s  Git status")
-    table.insert(lines, "  T  Terminal         ?  Help")
+    table.insert(lines, "  p  Projects         f  Find files")
+    table.insert(lines, "  g  Grep project      q  Quit")
     table.insert(lines, "")
-    table.insert(lines, "  Press a number to open a project, or q to quit.")
+    table.insert(lines, "  Other commands are available through the leader menu.")
     vim.bo[buf].modifiable = true
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.bo[buf].modifiable = false
@@ -46,22 +44,16 @@ local function open_dashboard()
   local function map(lhs, rhs, desc)
     vim.keymap.set("n", lhs, rhs, { buffer = buf, silent = true, desc = desc })
   end
-  local function select_project(index)
-    local root = recent[index]
-    if not root then return end
-    vim.api.nvim_set_current_dir(root)
-    M.refresh_git(buf, git_line)
-    vim.cmd("VimZapFiles")
-  end
-  for index = 1, #recent do map(tostring(index), function() select_project(index) end, "Open project") end
+  map("p", function()
+    vim.ui.select(recent, { prompt = "Projects" }, function(root)
+      if not root then return end
+      vim.api.nvim_set_current_dir(root)
+      M.refresh_git(buf, git_line)
+      vim.cmd("VimZapFiles")
+    end)
+  end, "Projects")
   map("f", "<cmd>VimZapFiles<cr>", "Find files")
   map("g", "<cmd>VimZapGrep<cr>", "Grep project")
-  map("r", "<cmd>VimZapRecent<cr>", "Recent files")
-  map("b", "<cmd>VimZapBuffers<cr>", "Buffers")
-  map("t", "<cmd>VimZapTasks<cr>", "Project tasks")
-  map("s", "<leader>gs", "Git status")
-  map("T", "<cmd>VimZapTerminalToggle<cr>", "Terminal")
-  map("?", "<leader>sh", "Help")
   map("q", "<cmd>quit<cr>", "Quit")
 
   M.refresh_git(buf, git_line)
