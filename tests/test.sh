@@ -90,9 +90,15 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" '✦ First conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" '✦ Codex'
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
+grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
+  tmux -L dotfiles-test new-window -t verify -n second
+  tmux -L dotfiles-test select-window -t verify:1
+  tmux -L dotfiles-test new-window -a -t verify:1 -n inserted
+  windows=$(tmux -L dotfiles-test list-windows -F '#{window_index}:#{window_name}')
+  [[ "$(sed -n '2p' <<<"$windows")" == '2:inserted' && "$(sed -n '3p' <<<"$windows")" == '3:second' ]] || fail "new window was not inserted after the active window"
   tmux -L dotfiles-test kill-server
 fi
 
