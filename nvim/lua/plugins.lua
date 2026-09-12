@@ -9,8 +9,6 @@ vim.pack.add({
   { src = "https://github.com/IFAKA/prophet.nvim", version = "v2.*" },
 }, { confirm = false, load = true })
 
-vim.cmd.packadd("mini.nvim")
-vim.cmd.packadd("flash.nvim")
 require("mini.pick").setup()
 require("flash").setup()
 require("which-key").setup({ delay = 300 })
