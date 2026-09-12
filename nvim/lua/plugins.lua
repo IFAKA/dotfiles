@@ -9,6 +9,7 @@ local plugins = {
   "https://github.com/rcarriga/nvim-dap-ui",
 }
 local sfcc = projects.is_sfcc()
+if not sfcc then vim.g.loaded_prophet = 1 end
 if sfcc then
   table.insert(plugins, { src = "https://github.com/IFAKA/prophet.nvim", version = "v2.*" })
 end
