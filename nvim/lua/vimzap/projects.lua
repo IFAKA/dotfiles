@@ -21,6 +21,13 @@ function M.root_or_cwd(path)
   return M.root(path) or vim.fs.normalize(vim.fn.getcwd())
 end
 
+function M.is_sfcc(path)
+  local root = M.root(path)
+  if not root then return false end
+  return vim.fn.filereadable(root .. "/dw.json") == 1
+    or vim.fn.filereadable(root .. "/dw.js") == 1
+end
+
 function M.recent()
   local projects, seen = {}, {}
   local function add(path)

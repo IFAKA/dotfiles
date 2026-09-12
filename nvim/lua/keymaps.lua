@@ -240,17 +240,19 @@ map("<leader>dr", dap_action("restart"), "Debug restart")
 map("<leader>dq", dap_action("terminate"), "Debug stop")
 map("<leader>du", function() require("vimzap.debug").setup(); require("dapui").toggle() end, "Debug UI")
 map("<leader>de", function() require("vimzap.debug").setup(); require("dapui").eval() end, "Debug evaluate", { "n", "v" })
-map("<leader>pc", "<cmd>ProphetClean<cr>", "Prophet upload all cartridges")
-map("<leader>pt", "<cmd>ProphetToggle<cr>", "Prophet toggle auto-upload")
-map("<leader>ps", "<cmd>ProphetStatus<cr>", "Prophet status")
-map("<leader>pe", "<cmd>ProphetEnable<cr>", "Prophet enable auto-upload")
-map("<leader>pd", "<cmd>ProphetDisable<cr>", "Prophet disable auto-upload")
-map("<leader>pu", "<cmd>ProphetUpload<cr>", "Prophet upload cartridge")
-map("<leader>pC", "<cmd>ProphetCheckSandbox<cr>", "Prophet check sandbox")
-map("<leader>pf", "<cmd>ProphetControllers<cr>", "Find SFCC controller")
-map("<leader>pi", "<cmd>ProphetTemplates<cr>", "Find ISML template")
-map("<leader>pl", "<cmd>ProphetLogs<cr>", "View SFCC logs")
-map("<leader>pr", "<cmd>ProphetRefresh<cr>", "Refresh SFCC controllers")
+if projects.is_sfcc() then
+  map("<leader>pc", "<cmd>ProphetClean<cr>", "Prophet upload all cartridges")
+  map("<leader>pt", "<cmd>ProphetToggle<cr>", "Prophet toggle auto-upload")
+  map("<leader>ps", "<cmd>ProphetStatus<cr>", "Prophet status")
+  map("<leader>pe", "<cmd>ProphetEnable<cr>", "Prophet enable auto-upload")
+  map("<leader>pd", "<cmd>ProphetDisable<cr>", "Prophet disable auto-upload")
+  map("<leader>pu", "<cmd>ProphetUpload<cr>", "Prophet upload cartridge")
+  map("<leader>pC", "<cmd>ProphetCheckSandbox<cr>", "Prophet check sandbox")
+  map("<leader>pf", "<cmd>ProphetControllers<cr>", "Find SFCC controller")
+  map("<leader>pi", "<cmd>ProphetTemplates<cr>", "Find ISML template")
+  map("<leader>pl", "<cmd>ProphetLogs<cr>", "View SFCC logs")
+  map("<leader>pr", "<cmd>ProphetRefresh<cr>", "Refresh SFCC controllers")
+end
 map("[d", function() vim.diagnostic.jump({ count = -1 }) end, "Previous diagnostic")
 map("]d", function() vim.diagnostic.jump({ count = 1 }) end, "Next diagnostic")
 map("[e", function() vim.diagnostic.jump({ count = -1, severity = vim.diagnostic.severity.ERROR }) end, "Previous error")
@@ -275,9 +277,9 @@ if which_key_ok then
     { "<leader>r", group = "Run / tasks" },
     { "<leader>d", group = "Debug" },
     { "<leader>g", group = "Git" },
-    { "<leader>p", group = "Prophet / SFCC" },
     { "<leader>s", group = "Search / help" },
   })
+  if projects.is_sfcc() then which_key.add({ { "<leader>p", group = "Prophet / SFCC" } }) end
 end
 
 vim.api.nvim_create_autocmd("LspAttach", {
