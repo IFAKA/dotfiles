@@ -77,7 +77,8 @@ course "/path/to/course"
 With multiple courses, `course` shows a small selector with discovered video
 counts and remembers the last course. It restores the exact last played lesson
 and timestamp through mpv's native watch-later files. `course <query>` filters
-course names, while an explicit directory still opens directly. mpv opens maximized
+course names, while an explicit directory still opens directly. mpv opens as a
+maximized window with its title bar visible
 and uses native `--playlist-start=auto` and watch-later
 files to resume the last video and timestamp. State is stored atomically
 outside the course folders at `~/.local/state/course/state.json` (or

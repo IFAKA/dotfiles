@@ -65,6 +65,11 @@ def course_for(video: Path) -> Path:
     root = Path(os.environ.get("COURSE_DIR") or Path.home() / "Documents/Courses").expanduser().resolve()
     try: return root / video.relative_to(root).parts[0]
     except ValueError: return video.parent.resolve()
+def maximize_window() -> None:
+    if sys.platform != "darwin": return
+    script = 'tell application "System Events" to tell process "mpv" to perform action "AXZoomWindow" of window 1'
+    try: subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2, check=False)
+    except (OSError, subprocess.TimeoutExpired): pass
 def main() -> int:
     if len(sys.argv) != 2: print("Usage: course-play COURSE|VIDEO", file=sys.stderr); return 2
     target = Path(sys.argv[1]).expanduser().resolve(); course = target if target.is_dir() else course_for(target); items = playlist(course)
@@ -75,9 +80,10 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
         playlist_file = Path(directory) / "playlist.m3u"; playlist_file.write_text("\n".join(str(p) for p in items) + "\n", encoding="utf-8"); socket_path = str(Path(directory) / "mpv.sock")
         process = subprocess.Popen(["mpv", "--really-quiet", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
-        watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None
+        watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None; window_maximized = False
         while process.poll() is None:
             if client is None and Path(socket_path).exists():
+                if not window_maximized: maximize_window(); window_maximized = True
                 try: client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); client.connect(socket_path)
                 except OSError: client = None
             if client:
