@@ -61,17 +61,28 @@ dotfiles install course --yes
 ```
 
 This installs Ghostty, tmux, Yazi, mpv, and ffmpeg when they are missing. The
-workflow uses native mpv for smooth GPU-accelerated playback; Kitty inline video
-is intentionally not configured because it became laggy at useful viewport
-sizes and was less efficient.
+workflow uses native, maximized mpv for smooth GPU-accelerated playback; Kitty
+inline video is intentionally not configured because it became laggy at useful
+viewport sizes and was less efficient.
 
 Start Yazi in the default course directory, or pass a course path (spaces are
 supported):
 
 ```bash
 course
-course "/Users/faka/Documents/Courses/AI Engineering Buildcamp From RAG to Agents"
+course "/path/to/course"
 ```
+
+With multiple courses, `course` shows a small selector with discovered video
+counts and remembers the last course. It restores the last played lesson when
+possible. `course <query>` filters course names, while an explicit directory
+still opens directly. State is stored atomically outside the course folders at
+`~/.local/state/course/state.json` (or `$XDG_STATE_HOME`).
+
+The thin `course-play` wrapper records the current video and marks it complete
+only after roughly 90% playback plus a minimum amount of continuous watching;
+mpv remains responsible for timestamp resume through its native watch-later
+files. Seeking near the end briefly will not count as completion.
 
 Set `COURSE_DIR` to change the default directory. In Yazi, use `j/k` to move,
 `h/l` for parent/enter, `Enter` to open, `/` to search, and `q` to quit. Enter

@@ -1,0 +1,115 @@
+#!/usr/bin/env python3
+"""Run native mpv and update course state from conservative playback evidence."""
+
+from __future__ import annotations
+
+import json
+import os
+import socket
+import subprocess
+import sys
+import tempfile
+import time
+from pathlib import Path
+
+
+def state_path() -> Path:
+    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    return Path(os.environ.get("COURSE_STATE_FILE") or root / "course/state.json").expanduser()
+
+
+def load() -> dict:
+    try:
+        with state_path().open(encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save(state: dict) -> None:
+    destination = state_path()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp.{os.getpid()}")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, destination)
+
+
+def query(client: socket.socket, property_name: str) -> float | None:
+    client.sendall((json.dumps({"command": ["get_property", property_name]}) + "\n").encode())
+    client.settimeout(0.25)
+    try:
+        value = json.loads(client.recv(4096).decode()).get("data")
+        return float(value) if value is not None else None
+    except (OSError, ValueError, TypeError):
+        return None
+
+
+def course_for(video: Path) -> Path:
+    active_value = os.environ.get("COURSE_ACTIVE_DIR")
+    active = Path(active_value).expanduser() if active_value else None
+    if active and active.is_dir():
+        try:
+            video.relative_to(active.resolve())
+            return active.resolve()
+        except ValueError:
+            pass
+    root = Path(os.environ.get("COURSE_DIR") or Path.home() / "Documents/Courses").expanduser().resolve()
+    try:
+        relative = video.relative_to(root)
+        return root / relative.parts[0]
+    except ValueError:
+        return video.parent.resolve()
+
+
+def main() -> int:
+    if len(sys.argv) != 2:
+        print("Usage: course-play VIDEO", file=sys.stderr)
+        return 2
+    video = Path(sys.argv[1]).expanduser().resolve()
+    course = course_for(video)
+    state = load()
+    key = str(course)
+    data = state.setdefault("courses", {}).setdefault(key, {})
+    lesson = video.relative_to(course).as_posix()
+    data["current_lesson"] = lesson
+    state["last_course"] = key
+    save(state)
+
+    with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
+        socket_path = str(Path(directory) / "mpv.sock")
+        process = subprocess.Popen(["mpv", f"--input-ipc-server={socket_path}", "--", str(video)])
+        watched = 0.0
+        previous = None
+        duration = None
+        client = None
+        while process.poll() is None:
+            if client is None and Path(socket_path).exists():
+                try:
+                    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+                    client.connect(socket_path)
+                except OSError:
+                    client = None
+            if client is not None:
+                position = query(client, "time-pos")
+                duration = duration or query(client, "duration")
+                if position is not None and previous is not None and 0 <= position - previous <= 2.5:
+                    watched += position - previous
+                previous = position
+            time.sleep(1)
+        if client is not None:
+            client.close()
+        if duration and previous and previous / duration >= 0.9 and watched >= min(60.0, max(3.0, duration * 0.1)):
+            completed = set(data.get("completed", []))
+            completed.add(lesson)
+            data["completed"] = sorted(completed)
+            save(state)
+        return process.returncode or 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

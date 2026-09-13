@@ -1,22 +1,166 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/usr/bin/env python3
+"""Select a course, restore its last lesson, and open it in Yazi."""
 
-if (($# > 1)); then
-  echo "Usage: course [path]" >&2
-  exit 2
-fi
+from __future__ import annotations
 
-course_root="${COURSE_DIR:-$HOME/Documents/Courses}"
-target="${1:-$course_root}"
+import json
+import os
+import select
+import sys
+import termios
+import tty
+from pathlib import Path
 
-if [[ ! -d "$target" ]]; then
-  echo "Course directory not found: $target" >&2
-  exit 1
-fi
+VIDEO_EXTENSIONS = {".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".ogv", ".ts", ".webm", ".wmv"}
 
-command -v yazi >/dev/null 2>&1 || {
-  echo "Error: yazi is required. Run: dotfiles install course" >&2
-  exit 1
-}
 
-exec yazi -- "$target"
+def course_root() -> Path:
+    return Path(os.environ.get("COURSE_DIR") or Path.home() / "Documents/Courses").expanduser().resolve()
+
+
+def state_path() -> Path:
+    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
+    return Path(os.environ.get("COURSE_STATE_FILE") or root / "course/state.json").expanduser()
+
+
+def load_state() -> dict:
+    try:
+        with state_path().open(encoding="utf-8") as handle:
+            value = json.load(handle)
+        return value if isinstance(value, dict) else {}
+    except (OSError, ValueError):
+        return {}
+
+
+def save_state(state: dict) -> None:
+    destination = state_path()
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = destination.with_name(f".{destination.name}.tmp.{os.getpid()}")
+    with temporary.open("w", encoding="utf-8") as handle:
+        json.dump(state, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+        handle.flush()
+        os.fsync(handle.fileno())
+    os.replace(temporary, destination)
+
+
+def videos(course: Path) -> list[Path]:
+    return sorted((path for path in course.rglob("*") if path.is_file() and path.suffix.lower() in VIDEO_EXTENSIONS), key=lambda path: str(path).casefold())
+
+
+def relative(path: Path, course: Path) -> str:
+    return path.relative_to(course).as_posix()
+
+
+def summary(course: Path, data: dict) -> tuple[int, int, str | None]:
+    lessons = videos(course)
+    lesson_names = {relative(path, course) for path in lessons}
+    completed = {name for name in data.get("completed", []) if name in lesson_names}
+    current = data.get("current_lesson")
+    return len(completed), len(lessons), current if current in lesson_names else None
+
+
+def line(course: Path, data: dict, selected: bool) -> str:
+    done, total, current = summary(course, data)
+    percent = f"{round(done * 100 / total):d}%" if total else "0%"
+    marker = "▶" if selected and current else ("✓" if total and done == total else " ")
+    return f"{marker} {course.name:<28} {done}/{total:<4} {percent}"
+
+
+def read_key() -> str:
+    descriptor = sys.stdin.fileno()
+    previous = termios.tcgetattr(descriptor)
+    try:
+        tty.setraw(descriptor)
+        first = sys.stdin.read(1)
+        if first == "\x1b" and select.select([sys.stdin], [], [], 0.05)[0]:
+            sequence = sys.stdin.read(2)
+            return {"[A": "UP", "[B": "DOWN"}.get(sequence, "")
+        return first
+    finally:
+        termios.tcsetattr(descriptor, termios.TCSADRAIN, previous)
+
+
+def choose(courses: list[Path], state: dict) -> Path:
+    course_data = state.setdefault("courses", {})
+    selected = next((index for index, course in enumerate(courses) if str(course) == state.get("last_course")), 0)
+    if not sys.stdin.isatty() or not sys.stdout.isatty():
+        return courses[selected]
+    while True:
+        print("\033[2J\033[HCOURSES")
+        for index, course in enumerate(courses):
+            print(f">{line(course, course_data.get(str(course), {}), index == selected)[1:]}")
+        sys.stdout.flush()
+        key = read_key()
+        if key in ("j", "DOWN"):
+            selected = (selected + 1) % len(courses)
+        elif key in ("k", "UP"):
+            selected = (selected - 1) % len(courses)
+        elif key in ("\r", "\n"):
+            return courses[selected]
+        elif key == "q":
+            raise SystemExit(0)
+
+
+def matches(courses: list[Path], query: str) -> list[Path]:
+    if not query:
+        return courses
+    needle = query.casefold()
+    exact = [course for course in courses if course.name.casefold() == needle]
+    if exact:
+        return exact
+    prefix = [course for course in courses if course.name.casefold().startswith(needle)]
+    return prefix or [course for course in courses if all(char in course.name.casefold() for char in needle)]
+
+
+def main() -> int:
+    if len(sys.argv) > 2:
+        print("Usage: course [path-or-query]", file=sys.stderr)
+        return 2
+    root = course_root()
+    if not root.is_dir():
+        print(f"Course directory not found: {root}", file=sys.stderr)
+        return 1
+    if not shutil_which("yazi"):
+        print("Error: yazi is required. Run: dotfiles install course", file=sys.stderr)
+        return 1
+    state = load_state()
+    argument = sys.argv[1] if len(sys.argv) == 2 else ""
+    explicit = Path(argument).expanduser() if argument else None
+    if explicit and not explicit.is_dir() and (explicit.is_absolute() or "/" in argument or argument.startswith((".", "~"))):
+        print(f"Course directory not found: {explicit.resolve()}", file=sys.stderr)
+        return 1
+    if explicit and explicit.is_dir():
+        selected = explicit.resolve()
+    else:
+        courses = sorted((path for path in root.iterdir() if path.is_dir()), key=lambda path: path.name.casefold())
+        if not courses:
+            print(f"No courses found in: {root}", file=sys.stderr)
+            return 1
+        candidates = matches(courses, argument)
+        if not candidates:
+            print(f"No course matches: {argument}", file=sys.stderr)
+            return 1
+        selected = candidates[0] if len(candidates) == 1 else choose(candidates, state)
+    key = str(selected)
+    data = state.setdefault("courses", {}).setdefault(key, {})
+    _, _, current = summary(selected, data)
+    target = selected / current if current else selected
+    state["last_course"] = key
+    save_state(state)
+    environment = os.environ.copy()
+    environment["COURSE_ACTIVE_DIR"] = key
+    os.execvpe("yazi", ["yazi", "--", str(target)], environment)
+    return 0
+
+
+def shutil_which(command: str) -> str | None:
+    for directory in os.environ.get("PATH", os.defpath).split(os.pathsep):
+        candidate = Path(directory) / command
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            return str(candidate)
+    return None
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

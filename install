@@ -50,7 +50,7 @@ confirm() {
 selected() { [[ "$component" == all || "$component" == "$1" ]]; }
 
 course_files_exist() {
-  [[ -f "$repo_dir/yazi/yazi.toml" && -f "$repo_dir/mpv/mpv.conf" && -f "$repo_dir/bin/course" ]]
+  [[ -f "$repo_dir/yazi/yazi.toml" && -f "$repo_dir/mpv/mpv.conf" && -f "$repo_dir/bin/course" && -f "$repo_dir/bin/course-play" ]]
 }
 
 install_packages() {
@@ -127,7 +127,7 @@ def section(name):
     end = existing.find("\n[", start + len(marker))
     return start, len(existing) if end < 0 else end
 
-if "mime = \"video/*\"" not in existing:
+if 'mime = "video/*", use = "course-play"' not in existing:
     start, end = section("open")
     if start is None:
         existing = existing.rstrip() + "\n\n" + fragment[fragment.find("[open]"):]
@@ -145,12 +145,15 @@ if "mime = \"video/*\"" not in existing:
 
 if "course-play = [" not in existing:
     start, end = section("opener")
-    opener = 'course-play = [\n  { run = \'mpv "$@"\', block = true, for = "unix" },\n]\n'
+    opener = 'course-play = [\n  { run = \'mpv -- %s\', block = true, for = "unix" },\n]\n'
     if start is None:
         existing = existing.rstrip() + "\n\n[opener]\n" + opener
     else:
         insert = existing.find("\n", start) + 1
         existing = existing[:start] + existing[start:insert] + opener + existing[insert:]
+else:
+    existing = existing.replace("{ run = 'mpv \"$@\"', block = true, for = \"unix\" },", "{ run = 'course-play %s', block = true, for = \"unix\" },")
+    existing = existing.replace("{ run = 'mpv -- %s', block = true, for = \"unix\" },", "{ run = 'course-play %s', block = true, for = \"unix\" },")
 
 destination.write_text(existing.rstrip() + "\n")
 PY
@@ -183,7 +186,9 @@ install_course() {
   merge_yazi_config "$backup/yazi.toml"
   merge_mpv_config "$backup/mpv.conf"
   copy_file "$repo_dir/bin/course" "$HOME/.local/bin/course" "$backup/course"
+  copy_file "$repo_dir/bin/course-play" "$HOME/.local/bin/course-play" "$backup/course-play"
   chmod +x "$HOME/.local/bin/course"
+  chmod +x "$HOME/.local/bin/course-play"
   printf 'dotfiles manages yazi.toml, mpv.conf, and course.\n' > "$course_marker"
   echo "  Course workflow installed (backup: $backup)"
 }

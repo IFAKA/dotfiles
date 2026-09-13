@@ -1,6 +1,6 @@
 [opener]
 course-play = [
-  { run = 'mpv "$@"', block = true, for = "unix" },
+  { run = 'course-play %s', block = true, for = "unix" },
 ]
 
 [open]
