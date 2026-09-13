@@ -75,9 +75,12 @@ course "/path/to/course"
 ```
 
 With multiple courses, `course` shows a small selector with discovered video
-counts and remembers the last course. It restores the last played lesson when
-possible. `course <query>` filters course names, while an explicit directory
-still opens directly. mpv uses native `--playlist-start=auto` and watch-later
+counts and remembers the last course. After selecting a course, its folders and
+videos are available in a small keyboard navigator: `j`/`k` move, `Enter` opens
+a folder or starts a lesson, `Backspace`/`Left` goes up, and `q` quits. It
+restores the last played lesson when possible. `course <query>` filters course
+names, while an explicit directory still opens directly. mpv opens maximized
+and uses native `--playlist-start=auto` and watch-later
 files to resume the last video and timestamp. State is stored atomically
 outside the course folders at `~/.local/state/course/state.json` (or
 `$XDG_STATE_HOME`), and

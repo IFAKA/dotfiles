@@ -61,6 +61,7 @@ grep -q '^audio-device=auto$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "existing 
 grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv resume option missing"
 PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$course_path"
 grep -q -- '--playlist-start=auto' "$test_home/mpv-args" || fail "course did not use native auto playlist resume"
+grep -q -- '--window-maximized=yes' "$test_home/mpv-args" || fail "course did not maximize mpv"
 PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course"
 grep -q "$override_path" "$test_home/mpv-playlist" || fail "COURSE_DIR override was not used"
 PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course" "$course_path"

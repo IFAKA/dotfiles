@@ -58,6 +58,37 @@ def choose(courses: list[Path], state: dict) -> Path:
         elif key in ("k", "UP"): selected = (selected - 1) % len(courses)
         elif key in ("\r", "\n"): return courses[selected]
         elif key == "q": raise SystemExit(0)
+
+def directory_entries(directory: Path, course: Path) -> list[Path]:
+    entries = [p for p in directory.iterdir() if p.is_dir() or p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS]
+    return sorted(entries, key=lambda p: (p.is_file(), p.name.casefold()))
+
+def choose_lesson(course: Path, state: dict) -> Path | None:
+    """Navigate a course tree without a second file browser dependency."""
+    if not sys.stdin.isatty() or not sys.stdout.isatty(): return None
+    data = state.setdefault("courses", {}).get(str(course), {})
+    current = data.get("current_lesson")
+    directory = course / Path(current).parent if current else course
+    directory = directory if directory.is_dir() else course
+    selected = 0
+    while True:
+        entries = directory_entries(directory, course)
+        if directory != course: entries.insert(0, directory.parent)
+        if entries and selected >= len(entries): selected = len(entries) - 1
+        print("\033[2J\033[H" + str(directory) + "\n\nj/k move · Enter open · Backspace/← up · q quit\n")
+        for index, entry in enumerate(entries):
+            label = entry.name + ("/" if entry.is_dir() else "")
+            print(f"{'▶' if index == selected else ' '} {label}")
+        sys.stdout.flush(); key = read_key()
+        if key in ("j", "DOWN") and entries: selected = (selected + 1) % len(entries)
+        elif key in ("k", "UP") and entries: selected = (selected - 1) % len(entries)
+        elif key in ("\r", "\n") and entries:
+            picked = entries[selected]
+            if picked.is_dir(): directory, selected = picked, 0
+            else: return picked
+        elif key in ("\x08", "\x7f", "LEFT") and directory != course:
+            directory, selected = directory.parent, 0
+        elif key == "q": raise SystemExit(0)
 def matches(courses: list[Path], query: str) -> list[Path]:
     if not query: return courses
     needle = query.casefold(); exact = [c for c in courses if c.name.casefold() == needle]
@@ -80,7 +111,8 @@ def main() -> int:
         candidates = matches(courses, argument)
         if not candidates: print(f"No course matches: {argument}", file=sys.stderr); return 1
         selected = candidates[0] if len(candidates) == 1 else choose(candidates, state)
+    lesson = choose_lesson(selected, state)
     key = str(selected); data = state.setdefault("courses", {}).setdefault(key, {}); state["last_course"] = key; save_state(state)
     if not shutil.which("mpv"): print("Error: mpv is required. Run: dotfiles install course", file=sys.stderr); return 1
-    os.execvpe("course-play", ["course-play", str(selected)], os.environ.copy()); return 0
+    os.execvpe("course-play", ["course-play", str(lesson or selected)], os.environ.copy()); return 0
 if __name__ == "__main__": raise SystemExit(main())
