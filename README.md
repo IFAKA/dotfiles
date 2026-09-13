@@ -51,3 +51,31 @@ The completion check disappears while you are viewing that window.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.
+
+## Terminal-first course workflow
+
+Install the course workflow and its Homebrew dependencies on macOS:
+
+```bash
+dotfiles install course --yes
+```
+
+This installs Ghostty, tmux, Yazi, mpv, and ffmpeg when they are missing. The
+workflow uses native mpv for smooth GPU-accelerated playback; Kitty inline video
+is intentionally not configured because it became laggy at useful viewport
+sizes and was less efficient.
+
+Start Yazi in the default course directory, or pass a course path (spaces are
+supported):
+
+```bash
+course
+course "/Users/faka/Documents/Courses/AI Engineering Buildcamp From RAG to Agents"
+```
+
+Set `COURSE_DIR` to change the default directory. In Yazi, use `j/k` to move,
+`h/l` for parent/enter, `Enter` to open, `/` to search, and `q` to quit. Enter
+on a video starts native mpv and returns directly to the same Yazi session when
+mpv quits. In mpv, `Space` pauses/plays, `Left/Right` seeks, `Up/Down` seek
+farther, `[` and `]` change playback speed, `Backspace` resets speed, `f`
+toggles fullscreen, and `q` quits back to Yazi. mpv saves playback positions.

@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Independent tmux and Neovim installer for macOS and Linux.
+# Independent tmux, Neovim, and terminal course-workflow installer for macOS and Linux.
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
@@ -17,16 +17,17 @@ config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
 data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
 nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
+course_marker="$config_root/yazi/.dotfiles-course-managed"
 tmux_files=(tmux.conf git-status.sh program-name.sh codex-status.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua lsp/ts_ls.lua lsp/html.lua lsp/cssls.lua lsp/jsonls.lua lsp/tailwindcss.lua lsp/eslint.lua lsp/lua_ls.lua lsp/pyright.lua lsp/gopls.lua lsp/clangd.lua lsp/rust_analyzer.lua)
 
 usage() {
   cat <<'EOF'
-dotfiles — independent tmux and Neovim configuration
+dotfiles — independent tmux, Neovim, and terminal course-workflow configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [tmux|nvim] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [tmux|nvim|course] [--yes] [--dry-run]
 
 Actions:
   install       Install both components (default)
@@ -47,6 +48,10 @@ confirm() {
   [[ "$answer" =~ ^[Yy]$ ]]
 }
 selected() { [[ "$component" == all || "$component" == "$1" ]]; }
+
+course_files_exist() {
+  [[ -f "$repo_dir/yazi/yazi.toml" && -f "$repo_dir/mpv/mpv.conf" && -f "$repo_dir/bin/course" ]]
+}
 
 install_packages() {
   local os="$1"; local -a packages=()
@@ -69,7 +74,20 @@ install_packages() {
     fi
     command -v rust-analyzer >/dev/null 2>&1 || packages+=(rust-analyzer)
   fi
+  if selected course; then
+    command -v tmux >/dev/null 2>&1 || packages+=(tmux)
+    command -v yazi >/dev/null 2>&1 || packages+=(yazi)
+    command -v mpv >/dev/null 2>&1 || packages+=(mpv)
+    command -v ffmpeg >/dev/null 2>&1 || packages+=(ffmpeg)
+    if [[ "$os" == Darwin ]] && ! command -v ghostty >/dev/null 2>&1 && ! brew list --cask ghostty >/dev/null 2>&1; then
+      ghostty_missing=true
+    fi
+  fi
   [[ "$dry_run" == true ]] && { echo "  Would install packages: ${packages[*]:-none}"; return; }
+  if [[ "$os" == Darwin && "${ghostty_missing:-false}" == true ]]; then
+    command -v brew >/dev/null 2>&1 || die "Homebrew is required to install missing tools: https://brew.sh"
+    brew install --cask ghostty
+  fi
   ((${#packages[@]} == 0)) && return
   if [[ "$os" == Darwin ]]; then
     command -v brew >/dev/null 2>&1 || die "Homebrew is required to install missing tools: https://brew.sh"
@@ -83,6 +101,91 @@ install_packages() {
   else
     die "No supported package manager found; install manually: ${packages[*]}"
   fi
+}
+
+merge_yazi_config() {
+  local source="$repo_dir/yazi/yazi.toml" dest="$config_root/yazi/yazi.toml" backup="$1"
+  if [[ ! -f "$dest" ]]; then
+    cp -p "$source" "$dest"
+    return
+  fi
+  mkdir -p "$(dirname "$backup")"
+  cp -p "$dest" "$backup"
+  python3 - "$source" "$dest" <<'PY'
+import sys
+from pathlib import Path
+
+source, destination = map(Path, sys.argv[1:])
+existing = destination.read_text()
+fragment = source.read_text()
+
+def section(name):
+    marker = f"[{name}]"
+    start = existing.find(marker)
+    if start < 0:
+        return None, None
+    end = existing.find("\n[", start + len(marker))
+    return start, len(existing) if end < 0 else end
+
+if "mime = \"video/*\"" not in existing:
+    start, end = section("open")
+    if start is None:
+        existing = existing.rstrip() + "\n\n" + fragment[fragment.find("[open]"):]
+    else:
+        block = existing[start:end]
+        rules = block.find("rules = [")
+        if rules >= 0:
+            insert = block.find("\n", rules) + 1
+            block = block[:insert] + '  { mime = "video/*", use = "course-play" },\n' + block[insert:]
+            existing = existing[:start] + block + existing[end:]
+        else:
+            insert = block.find("\n", block.find("[open]")) + 1
+            block = block[:insert] + "rules = [\n  { mime = \"video/*\", use = \"course-play\" },\n]\n" + block[insert:]
+            existing = existing[:start] + block + existing[end:]
+
+if "course-play = [" not in existing:
+    start, end = section("opener")
+    opener = 'course-play = [\n  { run = \'mpv "$@"\', block = true, for = "unix" },\n]\n'
+    if start is None:
+        existing = existing.rstrip() + "\n\n[opener]\n" + opener
+    else:
+        insert = existing.find("\n", start) + 1
+        existing = existing[:start] + existing[start:insert] + opener + existing[insert:]
+
+destination.write_text(existing.rstrip() + "\n")
+PY
+}
+
+merge_mpv_config() {
+  local source="$repo_dir/mpv/mpv.conf" dest="$config_root/mpv/mpv.conf" backup="$1"
+  if [[ ! -f "$dest" ]]; then
+    cp -p "$source" "$dest"
+    return
+  fi
+  mkdir -p "$(dirname "$backup")"
+  cp -p "$dest" "$backup"
+  while IFS= read -r option; do
+    [[ -z "$option" || "$option" == \#* ]] && continue
+    grep -Eq "^${option%%=*}(=|$)" "$dest" || printf '%s\n' "$option" >> "$dest"
+  done < "$source"
+}
+
+install_course() {
+  selected course || return 0
+  course_files_exist || die "Invalid course component in checkout"
+  local yazi_dest="$config_root/yazi" mpv_dest="$config_root/mpv"
+  local backup="$config_root/course.backup.$(date +%s)"
+  if [[ -f "$yazi_dest/yazi.toml" && ! -f "$course_marker" ]]; then
+    confirm "Existing Yazi config found. Back up and merge the course opener?" || { echo "  Course installation cancelled."; return; }
+  fi
+  if [[ "$dry_run" == true ]]; then echo "  Would install course workflow into $config_root and $HOME/.local/bin"; return; fi
+  mkdir -p "$yazi_dest" "$mpv_dest" "$HOME/.local/bin"
+  merge_yazi_config "$backup/yazi.toml"
+  merge_mpv_config "$backup/mpv.conf"
+  copy_file "$repo_dir/bin/course" "$HOME/.local/bin/course" "$backup/course"
+  chmod +x "$HOME/.local/bin/course"
+  printf 'dotfiles manages yazi.toml, mpv.conf, and course.\n' > "$course_marker"
+  echo "  Course workflow installed (backup: $backup)"
 }
 
 install_language_servers() {
@@ -159,6 +262,11 @@ uninstall_component() {
   local kind="$1" dest backup file found=false
   if [[ "$kind" == nvim ]]; then dest="$config_root/nvim"; backup="$config_root/nvim.uninstall-backup.$(date +%s)"; [[ -f "$nvim_marker" ]] || { echo "  Neovim is not managed; nothing removed."; return; }; fi
   if [[ "$kind" == tmux ]]; then dest="$config_root/tmux"; backup="$config_root/tmux.uninstall-backup.$(date +%s)"; [[ -f "$tmux_marker" ]] || { echo "  tmux is not managed; nothing removed."; return; }; fi
+  if [[ "$kind" == course ]]; then
+    [[ -f "$course_marker" ]] || { echo "  Course workflow is not managed; nothing removed."; return; }
+    echo "  Course uninstall is manual because Yazi config may contain merged user settings. Review the course backup before removing files."
+    return
+  fi
   confirm "Remove managed $kind files?" || return
   if [[ "$dry_run" == true ]]; then echo "  Would remove managed $kind files from $dest"; return; fi
   if [[ "$kind" == nvim ]]; then
@@ -185,7 +293,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      tmux|nvim) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      tmux|nvim|course) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -200,10 +308,11 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected course && uninstall_component course; exit 0; fi
 install_packages "$os"
 check_nvim
 install_tmux
 install_nvim
 install_language_servers
+install_course
 echo "dotfiles $action complete."

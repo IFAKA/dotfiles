@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+if (($# > 1)); then
+  echo "Usage: course [path]" >&2
+  exit 2
+fi
+
+course_root="${COURSE_DIR:-$HOME/Documents/Courses}"
+target="${1:-$course_root}"
+
+if [[ ! -d "$target" ]]; then
+  echo "Course directory not found: $target" >&2
+  exit 1
+fi
+
+command -v yazi >/dev/null 2>&1 || {
+  echo "Error: yazi is required. Run: dotfiles install course" >&2
+  exit 1
+}
+
+exec yazi -- "$target"

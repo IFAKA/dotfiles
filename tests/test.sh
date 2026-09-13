@@ -18,6 +18,7 @@ bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
+bash -n "$repo_root/bin/course" || fail "course script syntax"
 help=$("$repo_root/install" --help)
 grep -q 'Install both components' <<<"$help" || fail "help output"
 
@@ -25,6 +26,29 @@ grep -q 'Install both components' <<<"$help" || fail "help output"
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
 
 "$repo_root/install" install tmux --yes
+
+fake_yazi_bin=$(mktemp -d "$test_home/fake-yazi-bin.XXXXXX")
+cat > "$fake_yazi_bin/yazi" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${YAZI_ARGS_FILE:?}"
+EOF
+chmod +x "$fake_yazi_bin/yazi"
+course_path="$test_home/Documents/Courses/AI Engineering Buildcamp"
+mkdir -p "$course_path"
+mkdir -p "$XDG_CONFIG_HOME/mpv"
+printf 'audio-device=auto\n' > "$XDG_CONFIG_HOME/mpv/mpv.conf"
+"$repo_root/install" install course --yes
+assert_file "$XDG_CONFIG_HOME/yazi/yazi.toml"
+assert_file "$XDG_CONFIG_HOME/mpv/mpv.conf"
+assert_file "$test_home/.local/bin/course"
+grep -q '^audio-device=auto$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "existing mpv config was not preserved"
+grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv resume option missing"
+PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" "$test_home/.local/bin/course" "$course_path"
+assert_output "$(sed -n '1p' "$test_home/yazi-args")" "--"
+assert_output "$(sed -n '2p' "$test_home/yazi-args")" "$course_path"
+"$repo_root/install" install course --yes
+[[ "$(grep -c 'mime = \"video/\*\"' "$XDG_CONFIG_HOME/yazi/yazi.toml")" == 1 ]] || fail "Yazi video rule duplicated"
+[[ "$(grep -c 'course-play = \[' "$XDG_CONFIG_HOME/yazi/yazi.toml")" == 1 ]] || fail "Yazi course opener duplicated"
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"

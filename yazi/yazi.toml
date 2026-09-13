@@ -1,0 +1,9 @@
+[opener]
+course-play = [
+  { run = 'mpv "$@"', block = true, for = "unix" },
+]
+
+[open]
+rules = [
+  { mime = "video/*", use = "course-play" },
+]
