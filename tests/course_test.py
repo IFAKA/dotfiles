@@ -34,10 +34,4 @@ class CourseTests(unittest.TestCase):
         self.play_module.record_completion(data, "001 Intro.mp4", 100, 91, 10); self.assertIn("001 Intro.mp4", data["completed"])
     def test_empty_course_has_zero_progress(self):
         empty = self.root / "Empty"; empty.mkdir(); self.assertEqual(self.course_module.summary(empty, {})[:2], (0, 0))
-    def test_directory_entries_keep_folders_before_videos(self):
-        entries = self.course_module.directory_entries(self.course, self.course)
-        self.assertEqual([p.name for p in entries], ["BONUSES", "Week 1"])
-        entries = self.course_module.directory_entries(self.course / "Week 1", self.course)
-        self.assertEqual([p.name for p in entries], ["001 Intro.mp4", "002 RAG.mp4"])
-
 if __name__ == "__main__": unittest.main()

@@ -75,11 +75,9 @@ course "/path/to/course"
 ```
 
 With multiple courses, `course` shows a small selector with discovered video
-counts and remembers the last course. After selecting a course, its folders and
-videos are available in a small keyboard navigator: `j`/`k` move, `Enter` opens
-a folder or starts a lesson, `Backspace`/`Left` goes up, and `q` quits. It
-restores the last played lesson when possible. `course <query>` filters course
-names, while an explicit directory still opens directly. mpv opens maximized
+counts and remembers the last course. It restores the exact last played lesson
+and timestamp through mpv's native watch-later files. `course <query>` filters
+course names, while an explicit directory still opens directly. mpv opens maximized
 and uses native `--playlist-start=auto` and watch-later
 files to resume the last video and timestamp. State is stored atomically
 outside the course folders at `~/.local/state/course/state.json` (or
@@ -91,8 +89,9 @@ only after roughly 90% playback plus a minimum amount of continuous watching;
 mpv remains responsible for timestamp resume through its native watch-later
 files. Seeking near the end briefly will not count as completion.
 
-Set `COURSE_DIR` to change the default directory. In mpv, `Enter` advances to
-the next lesson, `Space` pauses/plays, `Left/Right` seeks, `Up/Down` seek
+Set `COURSE_DIR` to change the default directory. In mpv, `g` then `p` opens the
+searchable playlist picker; type part of a lesson name to select it. `F8` shows
+the playlist. `Enter` advances to the next lesson, `Space` pauses/plays, `Left/Right` seeks, `Up/Down` seek
 farther, `[` and `]` change playback speed, `Backspace` resets speed, `f`
 toggles fullscreen, and `q` quits. mpv saves playback positions. All `.mp4`
 files remain eligible lessons; `AUDIO` is not silently discarded and `BONUSES`
