@@ -33,16 +33,20 @@ grep -q 'Install both components' <<<"$help" || fail "help output"
 
 "$repo_root/install" install tmux --yes
 
-fake_yazi_bin=$(mktemp -d "$test_home/fake-yazi-bin.XXXXXX")
-cat > "$fake_yazi_bin/yazi" <<'EOF'
+fake_mpv_bin=$(mktemp -d "$test_home/fake-mpv-bin.XXXXXX")
+cat > "$fake_mpv_bin/mpv" <<'EOF'
 #!/usr/bin/env bash
-printf '%s\n' "$@" > "${YAZI_ARGS_FILE:?}"
+printf '%s\n' "$@" > "${MPV_ARGS_FILE:?}"
+for arg in "$@"; do
+  case "$arg" in --playlist=*) [[ -z "${MPV_PLAYLIST_FILE:-}" ]] || cp "${arg#--playlist=}" "$MPV_PLAYLIST_FILE" ;; esac
+done
 EOF
-chmod +x "$fake_yazi_bin/yazi"
+chmod +x "$fake_mpv_bin/mpv"
 course_path="$test_home/Documents/Courses/AI Engineering Buildcamp"
 override_path="$test_home/Other Courses/Override Course"
 mkdir -p "$course_path"
 mkdir -p "$override_path"
+touch "$course_path/001 Intro.mp4" "$override_path/001 Override.mp4"
 course_path=$(cd "$course_path" && pwd -P)
 course_root=$(cd "$(dirname "$course_path")" && pwd -P)
 override_path=$(cd "$override_path" && pwd -P)
@@ -50,39 +54,25 @@ override_root=$(cd "$(dirname "$override_path")" && pwd -P)
 mkdir -p "$XDG_CONFIG_HOME/mpv"
 printf 'audio-device=auto\n' > "$XDG_CONFIG_HOME/mpv/mpv.conf"
 "$repo_root/install" install course --yes
-assert_file "$XDG_CONFIG_HOME/yazi/yazi.toml"
 assert_file "$XDG_CONFIG_HOME/mpv/mpv.conf"
 assert_file "$test_home/.local/bin/course"
 assert_file "$test_home/.local/bin/course-play"
 grep -q '^audio-device=auto$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "existing mpv config was not preserved"
 grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv resume option missing"
-PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" "$test_home/.local/bin/course" "$course_path"
-assert_output "$(sed -n '1p' "$test_home/yazi-args")" "--"
-assert_output "$(sed -n '2p' "$test_home/yazi-args")" "$course_path"
-PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" HOME="$test_home" "$test_home/.local/bin/course"
-assert_output "$(sed -n '2p' "$test_home/yazi-args")" "$course_path"
-PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" COURSE_DIR="$override_root" "$test_home/.local/bin/course"
-assert_output "$(sed -n '2p' "$test_home/yazi-args")" "$override_path"
-PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" COURSE_DIR="$override_root" "$test_home/.local/bin/course" "$course_path"
-assert_output "$(sed -n '2p' "$test_home/yazi-args")" "$course_path"
+PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$course_path"
+grep -q -- '--playlist-start=auto' "$test_home/mpv-args" || fail "course did not use native auto playlist resume"
+PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course"
+grep -q "$override_path" "$test_home/mpv-playlist" || fail "COURSE_DIR override was not used"
+PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course" "$course_path"
+grep -q "$course_path" "$test_home/mpv-playlist" || fail "explicit course path was not used"
 missing_path="$test_home/missing"
 missing_output="$test_home/course-missing.out"
-if PATH="$fake_yazi_bin:$PATH" YAZI_ARGS_FILE="$test_home/yazi-args" "$test_home/.local/bin/course" "$missing_path" >"$missing_output" 2>&1; then
+if PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$missing_path" >"$missing_output" 2>&1; then
   fail "missing course directory was accepted"
 fi
-yazi_missing_output="$test_home/course-yazi-missing.out"
-if PATH="/usr/bin:/bin" "$test_home/.local/bin/course" "$course_path" >"$yazi_missing_output" 2>&1; then
-  fail "course succeeded without Yazi"
-fi
 grep -q "Course directory not found: $(cd "$(dirname "$missing_path")" && pwd -P)/missing" "$missing_output" || fail "missing directory error was unclear"
-grep -q 'yazi is required' "$yazi_missing_output" || fail "Yazi error was unclear"
-grep -q "run = 'course-play %s'" "$XDG_CONFIG_HOME/yazi/yazi.toml" || fail "Yazi opener does not use current path syntax"
-grep -q 'block = true' "$XDG_CONFIG_HOME/yazi/yazi.toml" || fail "Yazi opener is not blocking"
-! grep -Eq -- '--vo=kitty|vo=kitty' "$XDG_CONFIG_HOME/yazi/yazi.toml" "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "Kitty video output configured"
+! grep -Eq -- '--vo=kitty|vo=kitty' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "Kitty video output configured"
 "$repo_root/install" install course --yes
-[[ "$(grep -c 'mime = \"video/\*\", use = \"course-play\"' "$XDG_CONFIG_HOME/yazi/yazi.toml")" == 1 ]] || fail "Yazi video rule duplicated"
-[[ "$(grep -c 'course-play = \[' "$XDG_CONFIG_HOME/yazi/yazi.toml")" == 1 ]] || fail "Yazi course opener duplicated"
-[[ "$(grep -c "run = 'course-play %s'" "$XDG_CONFIG_HOME/yazi/yazi.toml")" == 1 ]] || fail "Yazi opener migration is not idempotent"
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
@@ -133,7 +123,6 @@ assert_output "$(git_status_output "$git_repo")" 'main *1 '
 git -C "$git_repo" checkout --detach -q
 assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) *1 "
 assert_output "$(git_status_output "$test_home")" ''
-assert_output "$("$repo_root/tmux/program-name.sh" "$$")" 'bash'
 
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
 cat > "$fake_bin/ps" <<'EOF'

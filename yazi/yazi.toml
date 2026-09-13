@@ -1,9 +1,0 @@
-[opener]
-course-play = [
-  { run = 'course-play %s', block = true, for = "unix" },
-]
-
-[open]
-rules = [
-  { mime = "video/*", use = "course-play" },
-]

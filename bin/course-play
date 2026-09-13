@@ -1,115 +1,86 @@
 #!/usr/bin/env python3
-"""Run native mpv and update course state from conservative playback evidence."""
-
+"""Play a recursive course playlist in mpv and maintain external progress."""
 from __future__ import annotations
-
-import json
-import os
-import socket
-import subprocess
-import sys
-import tempfile
-import time
+import json, os, re, socket, subprocess, sys, tempfile, time
 from pathlib import Path
 
-
+VIDEO_EXTENSIONS = {".avi", ".flv", ".m2ts", ".m4v", ".mkv", ".mov", ".mp4", ".mpeg", ".mpg", ".ogv", ".ts", ".webm", ".wmv"}
+NUMBERED = re.compile(r"^(\d+)")
 def state_path() -> Path:
-    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state")
-    return Path(os.environ.get("COURSE_STATE_FILE") or root / "course/state.json").expanduser()
-
-
+    root = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local/state").expanduser(); return Path(os.environ.get("COURSE_STATE_FILE") or root / "course/state.json").expanduser()
 def load() -> dict:
     try:
-        with state_path().open(encoding="utf-8") as handle:
-            value = json.load(handle)
+        with state_path().open(encoding="utf-8") as handle: value = json.load(handle)
         return value if isinstance(value, dict) else {}
-    except (OSError, ValueError):
-        return {}
-
-
+    except (OSError, ValueError): return {}
 def save(state: dict) -> None:
-    destination = state_path()
-    destination.parent.mkdir(parents=True, exist_ok=True)
-    temporary = destination.with_name(f".{destination.name}.tmp.{os.getpid()}")
+    destination = state_path(); destination.parent.mkdir(parents=True, exist_ok=True); temporary = destination.with_name(f".{destination.name}.tmp.{os.getpid()}")
     with temporary.open("w", encoding="utf-8") as handle:
-        json.dump(state, handle, indent=2, sort_keys=True)
-        handle.write("\n")
-        handle.flush()
-        os.fsync(handle.fileno())
+        json.dump(state, handle, indent=2, sort_keys=True, ensure_ascii=False); handle.write("\n"); handle.flush(); os.fsync(handle.fileno())
     os.replace(temporary, destination)
-
-
-def query(client: socket.socket, property_name: str) -> float | None:
-    client.sendall((json.dumps({"command": ["get_property", property_name]}) + "\n").encode())
-    client.settimeout(0.25)
+def videos(course: Path) -> list[Path]: return [p for p in course.rglob("*") if p.is_file() and p.suffix.lower() in VIDEO_EXTENSIONS]
+def relative(path: Path, course: Path) -> str: return path.relative_to(course).as_posix()
+def playlist(course: Path) -> list[Path]:
+    course = course.resolve(); found = {relative(p, course): p for p in videos(course)}; manifest = course / "names.txt"; ordered = []
+    if manifest.is_file():
+        for raw in manifest.read_text(encoding="utf-8", errors="replace").splitlines():
+            name = raw.strip()
+            if not name or name.startswith("#"): continue
+            candidate = Path(name); matches = [p for p in found.values() if p == candidate.resolve()] if candidate.is_absolute() else ([found[name]] if name in found else [])
+            if not matches and not candidate.suffix:
+                matches = [p for p in found.values() if p.stem.casefold() == name.casefold()]
+            if matches and matches[0] not in ordered: ordered.append(matches[0])
+    remaining = [p for p in found.values() if p not in ordered]
+    def key(path: Path):
+        rel = relative(path, course); match = NUMBERED.match(path.name)
+        return (0, int(match.group(1)), rel.casefold()) if match else (1, 0, rel.casefold())
+    return ordered + sorted(remaining, key=key)
+def record_completion(data: dict, lesson: str, duration: float | None, position: float | None, watched: float) -> None:
+    threshold = min(60.0, max(3.0, (duration or 0) * 0.1))
+    if duration and position is not None and position / duration >= 0.9 and watched >= threshold: data["completed"] = sorted(set(data.get("completed", [])) | {lesson})
+def query(client: socket.socket, property_name: str):
     try:
-        value = json.loads(client.recv(4096).decode()).get("data")
-        return float(value) if value is not None else None
-    except (OSError, ValueError, TypeError):
-        return None
-
-
+        client.sendall((json.dumps({"command":["get_property", property_name]}) + "\n").encode()); client.settimeout(0.25); return json.loads(client.recv(8192).decode()).get("data")
+    except (OSError, ValueError, TypeError): return None
 def course_for(video: Path) -> Path:
-    active_value = os.environ.get("COURSE_ACTIVE_DIR")
-    active = Path(active_value).expanduser() if active_value else None
+    active = Path(os.environ["COURSE_ACTIVE_DIR"]).expanduser().resolve() if os.environ.get("COURSE_ACTIVE_DIR") else None
     if active and active.is_dir():
-        try:
-            video.relative_to(active.resolve())
-            return active.resolve()
-        except ValueError:
-            pass
+        try: video.relative_to(active); return active
+        except ValueError: pass
     root = Path(os.environ.get("COURSE_DIR") or Path.home() / "Documents/Courses").expanduser().resolve()
-    try:
-        relative = video.relative_to(root)
-        return root / relative.parts[0]
-    except ValueError:
-        return video.parent.resolve()
-
-
+    try: return root / video.relative_to(root).parts[0]
+    except ValueError: return video.parent.resolve()
 def main() -> int:
-    if len(sys.argv) != 2:
-        print("Usage: course-play VIDEO", file=sys.stderr)
-        return 2
-    video = Path(sys.argv[1]).expanduser().resolve()
-    course = course_for(video)
-    state = load()
-    key = str(course)
-    data = state.setdefault("courses", {}).setdefault(key, {})
-    lesson = video.relative_to(course).as_posix()
-    data["current_lesson"] = lesson
-    state["last_course"] = key
-    save(state)
-
+    if len(sys.argv) != 2: print("Usage: course-play COURSE|VIDEO", file=sys.stderr); return 2
+    target = Path(sys.argv[1]).expanduser().resolve(); course = target if target.is_dir() else course_for(target); items = playlist(course)
+    if not items: print(f"No videos found in: {course}", file=sys.stderr); return 1
+    state = load(); key = str(course); data = state.setdefault("courses", {}).setdefault(key, {})
+    if target.is_file(): data["current_lesson"] = relative(target, course)
+    state["last_course"] = key; save(state)
     with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
-        socket_path = str(Path(directory) / "mpv.sock")
-        process = subprocess.Popen(["mpv", f"--input-ipc-server={socket_path}", "--", str(video)])
-        watched = 0.0
-        previous = None
-        duration = None
-        client = None
+        playlist_file = Path(directory) / "playlist.m3u"; playlist_file.write_text("\n".join(str(p) for p in items) + "\n", encoding="utf-8"); socket_path = str(Path(directory) / "mpv.sock")
+        process = subprocess.Popen(["mpv", "--really-quiet", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
+        watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None
         while process.poll() is None:
             if client is None and Path(socket_path).exists():
-                try:
-                    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-                    client.connect(socket_path)
-                except OSError:
-                    client = None
-            if client is not None:
-                position = query(client, "time-pos")
-                duration = duration or query(client, "duration")
-                if position is not None and previous is not None and 0 <= position - previous <= 2.5:
-                    watched += position - previous
+                try: client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); client.connect(socket_path)
+                except OSError: client = None
+            if client:
+                position = query(client, "time-pos"); raw_duration = query(client, "duration")
+                try: position = float(position) if position is not None else None; duration = float(raw_duration) if raw_duration is not None else duration
+                except (TypeError, ValueError): position = None
+                current_path = query(client, "path")
+                if current_path:
+                    try: next_lesson = relative(Path(current_path).resolve(), course)
+                    except ValueError: next_lesson = active
+                    if next_lesson and next_lesson != active:
+                        if active: record_completion(data, active, duration, previous, watched)
+                        active = next_lesson; watched = 0.0; previous = None; duration = None
+                    if active and data.get("current_lesson") != active: data["current_lesson"] = active; save(state)
+                if position is not None and previous is not None and 0 <= position - previous <= 2.5: watched += position - previous
                 previous = position
             time.sleep(1)
-        if client is not None:
-            client.close()
-        if duration and previous and previous / duration >= 0.9 and watched >= min(60.0, max(3.0, duration * 0.1)):
-            completed = set(data.get("completed", []))
-            completed.add(lesson)
-            data["completed"] = sorted(completed)
-            save(state)
+        if client: client.close()
+        if active: record_completion(data, active, duration, previous, watched); save(state)
         return process.returncode or 0
-
-
-if __name__ == "__main__":
-    raise SystemExit(main())
+if __name__ == "__main__": raise SystemExit(main())

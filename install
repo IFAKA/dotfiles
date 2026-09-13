@@ -17,7 +17,7 @@ config_root="${XDG_CONFIG_HOME:-$HOME/.config}"
 data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
 nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
-course_marker="$config_root/yazi/.dotfiles-course-managed"
+course_marker="$config_root/course/.dotfiles-course-managed"
 tmux_files=(tmux.conf git-status.sh program-name.sh codex-status.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua lsp/ts_ls.lua lsp/html.lua lsp/cssls.lua lsp/jsonls.lua lsp/tailwindcss.lua lsp/eslint.lua lsp/lua_ls.lua lsp/pyright.lua lsp/gopls.lua lsp/clangd.lua lsp/rust_analyzer.lua)
@@ -50,7 +50,7 @@ confirm() {
 selected() { [[ "$component" == all || "$component" == "$1" ]]; }
 
 course_files_exist() {
-  [[ -f "$repo_dir/yazi/yazi.toml" && -f "$repo_dir/mpv/mpv.conf" && -f "$repo_dir/bin/course" && -f "$repo_dir/bin/course-play" ]]
+  [[ -f "$repo_dir/mpv/mpv.conf" && -f "$repo_dir/bin/course" && -f "$repo_dir/bin/course-play" ]]
 }
 
 install_packages() {
@@ -76,7 +76,6 @@ install_packages() {
   fi
   if selected course; then
     command -v tmux >/dev/null 2>&1 || packages+=(tmux)
-    command -v yazi >/dev/null 2>&1 || packages+=(yazi)
     command -v mpv >/dev/null 2>&1 || packages+=(mpv)
     command -v ffmpeg >/dev/null 2>&1 || packages+=(ffmpeg)
     if [[ "$os" == Darwin ]] && ! command -v ghostty >/dev/null 2>&1 && ! brew list --cask ghostty >/dev/null 2>&1; then
@@ -103,62 +102,6 @@ install_packages() {
   fi
 }
 
-merge_yazi_config() {
-  local source="$repo_dir/yazi/yazi.toml" dest="$config_root/yazi/yazi.toml" backup="$1"
-  if [[ ! -f "$dest" ]]; then
-    cp -p "$source" "$dest"
-    return
-  fi
-  mkdir -p "$(dirname "$backup")"
-  cp -p "$dest" "$backup"
-  python3 - "$source" "$dest" <<'PY'
-import sys
-from pathlib import Path
-
-source, destination = map(Path, sys.argv[1:])
-existing = destination.read_text()
-fragment = source.read_text()
-
-def section(name):
-    marker = f"[{name}]"
-    start = existing.find(marker)
-    if start < 0:
-        return None, None
-    end = existing.find("\n[", start + len(marker))
-    return start, len(existing) if end < 0 else end
-
-if 'mime = "video/*", use = "course-play"' not in existing:
-    start, end = section("open")
-    if start is None:
-        existing = existing.rstrip() + "\n\n" + fragment[fragment.find("[open]"):]
-    else:
-        block = existing[start:end]
-        rules = block.find("rules = [")
-        if rules >= 0:
-            insert = block.find("\n", rules) + 1
-            block = block[:insert] + '  { mime = "video/*", use = "course-play" },\n' + block[insert:]
-            existing = existing[:start] + block + existing[end:]
-        else:
-            insert = block.find("\n", block.find("[open]")) + 1
-            block = block[:insert] + "rules = [\n  { mime = \"video/*\", use = \"course-play\" },\n]\n" + block[insert:]
-            existing = existing[:start] + block + existing[end:]
-
-if "course-play = [" not in existing:
-    start, end = section("opener")
-    opener = 'course-play = [\n  { run = \'mpv -- %s\', block = true, for = "unix" },\n]\n'
-    if start is None:
-        existing = existing.rstrip() + "\n\n[opener]\n" + opener
-    else:
-        insert = existing.find("\n", start) + 1
-        existing = existing[:start] + existing[start:insert] + opener + existing[insert:]
-else:
-    existing = existing.replace("{ run = 'mpv \"$@\"', block = true, for = \"unix\" },", "{ run = 'course-play %s', block = true, for = \"unix\" },")
-    existing = existing.replace("{ run = 'mpv -- %s', block = true, for = \"unix\" },", "{ run = 'course-play %s', block = true, for = \"unix\" },")
-
-destination.write_text(existing.rstrip() + "\n")
-PY
-}
-
 merge_mpv_config() {
   local source="$repo_dir/mpv/mpv.conf" dest="$config_root/mpv/mpv.conf" backup="$1"
   if [[ ! -f "$dest" ]]; then
@@ -176,20 +119,16 @@ merge_mpv_config() {
 install_course() {
   selected course || return 0
   course_files_exist || die "Invalid course component in checkout"
-  local yazi_dest="$config_root/yazi" mpv_dest="$config_root/mpv"
+  local mpv_dest="$config_root/mpv"
   local backup="$config_root/course.backup.$(date +%s)"
-  if [[ -f "$yazi_dest/yazi.toml" && ! -f "$course_marker" ]]; then
-    confirm "Existing Yazi config found. Back up and merge the course opener?" || { echo "  Course installation cancelled."; return; }
-  fi
   if [[ "$dry_run" == true ]]; then echo "  Would install course workflow into $config_root and $HOME/.local/bin"; return; fi
-  mkdir -p "$yazi_dest" "$mpv_dest" "$HOME/.local/bin"
-  merge_yazi_config "$backup/yazi.toml"
+  mkdir -p "$mpv_dest" "$HOME/.local/bin" "$(dirname "$course_marker")"
   merge_mpv_config "$backup/mpv.conf"
   copy_file "$repo_dir/bin/course" "$HOME/.local/bin/course" "$backup/course"
   copy_file "$repo_dir/bin/course-play" "$HOME/.local/bin/course-play" "$backup/course-play"
   chmod +x "$HOME/.local/bin/course"
   chmod +x "$HOME/.local/bin/course-play"
-  printf 'dotfiles manages yazi.toml, mpv.conf, and course.\n' > "$course_marker"
+  printf 'dotfiles manages mpv.conf, course, and course-play.\n' > "$course_marker"
   echo "  Course workflow installed (backup: $backup)"
 }
 
@@ -269,7 +208,7 @@ uninstall_component() {
   if [[ "$kind" == tmux ]]; then dest="$config_root/tmux"; backup="$config_root/tmux.uninstall-backup.$(date +%s)"; [[ -f "$tmux_marker" ]] || { echo "  tmux is not managed; nothing removed."; return; }; fi
   if [[ "$kind" == course ]]; then
     [[ -f "$course_marker" ]] || { echo "  Course workflow is not managed; nothing removed."; return; }
-    echo "  Course uninstall is manual because Yazi config may contain merged user settings. Review the course backup before removing files."
+    echo "  Course uninstall is manual because mpv.conf may contain merged user settings. Review the course backup before removing files."
     return
   fi
   confirm "Remove managed $kind files?" || return
