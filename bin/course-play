@@ -74,7 +74,7 @@ def main() -> int:
     state["last_course"] = key; save(state)
     with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
         playlist_file = Path(directory) / "playlist.m3u"; playlist_file.write_text("\n".join(str(p) for p in items) + "\n", encoding="utf-8"); socket_path = str(Path(directory) / "mpv.sock")
-        process = subprocess.Popen(["mpv", "--really-quiet", "--fs=yes", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
+        process = subprocess.Popen(["mpv", "--really-quiet", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
         watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None
         while process.poll() is None:
             if client is None and Path(socket_path).exists():
