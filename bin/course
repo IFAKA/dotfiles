@@ -38,8 +38,8 @@ def summary(course: Path, data: dict) -> tuple[int, int, str | None]:
     names = {relative(p, course) for p in videos(course)}; completed = {n for n in data.get("completed", []) if n in names}; current = data.get("current_lesson")
     return len(completed), len(names), current if current in names else None
 def line(course: Path, data: dict, selected: bool = False) -> str:
-    done, total, _ = summary(course, data); percent = f"{round(done * 100 / total):d}%" if total else "0%"; marker = "✓" if total and done == total else " "
-    return f"{marker} {course.name:<28} {done}/{total:<4} {percent}"
+    done, total, _ = summary(course, data); percent = f"{round(done * 100 / total):d}%" if total else "0%"; marker = "✓ " if total and done == total else "  "
+    return f"{course.name:<28} {done}/{total:<4} {percent}{marker}"
 def read_key() -> str:
     descriptor = sys.stdin.fileno(); previous = termios.tcgetattr(descriptor)
     try:
