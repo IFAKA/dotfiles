@@ -63,6 +63,11 @@ def set_property(client: socket.socket, property_name: str, value) -> None:
     try:
         client.sendall((json.dumps({"command": ["set_property", property_name, value], "request_id": _request_id}) + "\n").encode())
     except OSError: pass
+def zoom_window() -> bool:
+    if sys.platform != "darwin": return True
+    script = 'tell application "System Events" to tell process "mpv" to perform action "AXZoomWindow" of window 1'
+    try: return subprocess.run(["osascript", "-e", script], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=2, check=False).returncode == 0
+    except (OSError, subprocess.TimeoutExpired): return False
 def course_for(video: Path) -> Path:
     active = Path(os.environ["COURSE_ACTIVE_DIR"]).expanduser().resolve() if os.environ.get("COURSE_ACTIVE_DIR") else None
     if active and active.is_dir():
@@ -81,12 +86,14 @@ def main() -> int:
     with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
         playlist_file = Path(directory) / "playlist.m3u"; playlist_file.write_text("\n".join(str(p) for p in items) + "\n", encoding="utf-8"); socket_path = str(Path(directory) / "mpv.sock")
         process = subprocess.Popen(["mpv", "--really-quiet", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
-        watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None
+        watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None; window_maximized = False; next_zoom = 0.0
         while process.poll() is None:
             if client is None and Path(socket_path).exists():
                 try:
                     client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); client.connect(socket_path); set_property(client, "window-maximized", True)
                 except OSError: client = None
+            if Path(socket_path).exists() and not window_maximized and time.monotonic() >= next_zoom:
+                window_maximized = zoom_window(); next_zoom = time.monotonic() + 0.5
             if client:
                 position = query(client, "time-pos"); raw_duration = query(client, "duration")
                 try: position = float(position) if position is not None else None; duration = float(raw_duration) if raw_duration is not None else duration
