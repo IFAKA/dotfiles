@@ -57,6 +57,12 @@ def query(client: socket.socket, property_name: str):
                 _buffers[client] = buffer
                 return response.get("data")
     except (OSError, ValueError, TypeError): return None
+def set_property(client: socket.socket, property_name: str, value) -> None:
+    global _request_id
+    _request_id += 1
+    try:
+        client.sendall((json.dumps({"command": ["set_property", property_name, value], "request_id": _request_id}) + "\n").encode())
+    except OSError: pass
 def course_for(video: Path) -> Path:
     active = Path(os.environ["COURSE_ACTIVE_DIR"]).expanduser().resolve() if os.environ.get("COURSE_ACTIVE_DIR") else None
     if active and active.is_dir():
@@ -74,11 +80,12 @@ def main() -> int:
     state["last_course"] = key; save(state)
     with tempfile.TemporaryDirectory(prefix="course-mpv-") as directory:
         playlist_file = Path(directory) / "playlist.m3u"; playlist_file.write_text("\n".join(str(p) for p in items) + "\n", encoding="utf-8"); socket_path = str(Path(directory) / "mpv.sock")
-        process = subprocess.Popen(["mpv", "--really-quiet", "--autofit=100%x100%", "--geometry=0:0", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
+        process = subprocess.Popen(["mpv", "--really-quiet", "--window-maximized=yes", f"--input-ipc-server={socket_path}", f"--playlist={playlist_file}", "--playlist-start=auto"])
         watched = 0.0; previous = None; duration = None; active = data.get("current_lesson"); client = None
         while process.poll() is None:
             if client is None and Path(socket_path).exists():
-                try: client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); client.connect(socket_path)
+                try:
+                    client = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM); client.connect(socket_path); set_property(client, "window-maximized", True)
                 except OSError: client = None
             if client:
                 position = query(client, "time-pos"); raw_duration = query(client, "duration")

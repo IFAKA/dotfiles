@@ -62,7 +62,6 @@ grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "m
 PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$course_path"
 grep -q -- '--playlist-start=auto' "$test_home/mpv-args" || fail "course did not use native auto playlist resume"
 grep -q -- '--window-maximized=yes' "$test_home/mpv-args" || fail "course did not maximize mpv"
-grep -q -- '--autofit=100%x100%' "$test_home/mpv-args" || fail "course did not fit mpv to the display"
 ! grep -q -- '--fs=yes' "$test_home/mpv-args" || fail "course unexpectedly opened mpv fullscreen"
 PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course"
 grep -q "$override_path" "$test_home/mpv-playlist" || fail "COURSE_DIR override was not used"
