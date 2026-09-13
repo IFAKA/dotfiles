@@ -38,9 +38,24 @@ def playlist(course: Path) -> list[Path]:
 def record_completion(data: dict, lesson: str, duration: float | None, position: float | None, watched: float) -> None:
     threshold = min(60.0, max(3.0, (duration or 0) * 0.1))
     if duration and position is not None and position / duration >= 0.9 and watched >= threshold: data["completed"] = sorted(set(data.get("completed", [])) | {lesson})
+_request_id = 0
+_buffers: dict[socket.socket, bytes] = {}
 def query(client: socket.socket, property_name: str):
+    global _request_id
+    _request_id += 1
+    request_id = _request_id
     try:
-        client.sendall((json.dumps({"command":["get_property", property_name]}) + "\n").encode()); client.settimeout(0.25); return json.loads(client.recv(8192).decode()).get("data")
+        client.sendall((json.dumps({"command":["get_property", property_name], "request_id": request_id}) + "\n").encode())
+        client.settimeout(0.25); buffer = _buffers.get(client, b"")
+        while True:
+            if b"\n" not in buffer:
+                chunk = client.recv(8192)
+                if not chunk: return None
+                buffer += chunk
+            raw, buffer = buffer.split(b"\n", 1); response = json.loads(raw.decode())
+            if response.get("request_id") == request_id:
+                _buffers[client] = buffer
+                return response.get("data")
     except (OSError, ValueError, TypeError): return None
 def course_for(video: Path) -> Path:
     active = Path(os.environ["COURSE_ACTIVE_DIR"]).expanduser().resolve() if os.environ.get("COURSE_ACTIVE_DIR") else None
@@ -70,7 +85,7 @@ def main() -> int:
                 try: position = float(position) if position is not None else None; duration = float(raw_duration) if raw_duration is not None else duration
                 except (TypeError, ValueError): position = None
                 current_path = query(client, "path")
-                if current_path:
+                if isinstance(current_path, str) and current_path:
                     try: next_lesson = relative(Path(current_path).resolve(), course)
                     except ValueError: next_lesson = active
                     if next_lesson and next_lesson != active:
