@@ -1,0 +1,26 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+self=$(cd -P "$(dirname "$0")" && pwd)/$(basename "$0")
+real_mpv=
+old_ifs=$IFS
+IFS=:
+for directory in $PATH; do
+  [[ -n "$directory" ]] || directory=.
+  candidate="$directory/mpv"
+  if [[ -x "$candidate" ]]; then
+    candidate_real=$(cd -P "$(dirname "$candidate")" && pwd)/$(basename "$candidate")
+    if [[ "$candidate_real" != "$self" ]]; then
+      real_mpv="$candidate"
+      break
+    fi
+  fi
+done
+IFS=$old_ifs
+
+[[ -n "$real_mpv" ]] || { echo "Error: real mpv binary was not found on PATH" >&2; exit 127; }
+if (($# == 0)); then
+  exec "$real_mpv" .
+else
+  exec "$real_mpv" "$@"
+fi

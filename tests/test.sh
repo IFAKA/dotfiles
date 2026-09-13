@@ -18,64 +18,38 @@ bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
-python3 - "$repo_root/bin/course" "$repo_root/bin/course-play" <<'PY' || fail "course Python syntax"
-import pathlib
-import sys
-for filename in sys.argv[1:]:
-    compile(pathlib.Path(filename).read_text(), filename, "exec")
-PY
-python3 "$repo_root/tests/course_test.py" || fail "course state tests"
 help=$("$repo_root/install" --help)
-grep -q 'Install both components' <<<"$help" || fail "help output"
+grep -q 'tmux|nvim|mpv' <<<"$help" || fail "help output"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
 
 "$repo_root/install" install tmux --yes
 
+mkdir -p "$XDG_CONFIG_HOME/mpv"
+printf 'audio-device=auto\n' > "$XDG_CONFIG_HOME/mpv/mpv.conf"
 fake_mpv_bin=$(mktemp -d "$test_home/fake-mpv-bin.XXXXXX")
 cat > "$fake_mpv_bin/mpv" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${MPV_ARGS_FILE:?}"
-for arg in "$@"; do
-  case "$arg" in --playlist=*) [[ -z "${MPV_PLAYLIST_FILE:-}" ]] || cp "${arg#--playlist=}" "$MPV_PLAYLIST_FILE" ;; esac
-done
 EOF
 chmod +x "$fake_mpv_bin/mpv"
-course_path="$test_home/Documents/Courses/AI Engineering Buildcamp"
-override_path="$test_home/Other Courses/Override Course"
-mkdir -p "$course_path"
-mkdir -p "$override_path"
-touch "$course_path/001 Intro.mp4" "$override_path/001 Override.mp4"
-course_path=$(cd "$course_path" && pwd -P)
-course_root=$(cd "$(dirname "$course_path")" && pwd -P)
-override_path=$(cd "$override_path" && pwd -P)
-override_root=$(cd "$(dirname "$override_path")" && pwd -P)
-mkdir -p "$XDG_CONFIG_HOME/mpv"
-printf 'audio-device=auto\n' > "$XDG_CONFIG_HOME/mpv/mpv.conf"
-"$repo_root/install" install course --yes
+"$repo_root/install" install mpv --yes
 assert_file "$XDG_CONFIG_HOME/mpv/mpv.conf"
-assert_file "$test_home/.local/bin/course"
-assert_file "$test_home/.local/bin/course-play"
+assert_file "$test_home/.local/bin/mpv"
 grep -q '^audio-device=auto$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "existing mpv config was not preserved"
 grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv resume option missing"
-PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$course_path"
-grep -q -- '--playlist-start=auto' "$test_home/mpv-args" || fail "course did not use native auto playlist resume"
-grep -q -- '--window-maximized=yes' "$test_home/mpv-args" || fail "course did not maximize mpv"
-grep -q 'menu item "Zoom"' "$repo_root/bin/course-play" || fail "course did not include native macOS window zoom"
-! grep -q -- '--fs=yes' "$test_home/mpv-args" || fail "course unexpectedly opened mpv fullscreen"
-PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course"
-grep -q "$override_path" "$test_home/mpv-playlist" || fail "COURSE_DIR override was not used"
-PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PLAYLIST_FILE="$test_home/mpv-playlist" COURSE_DIR="$override_root" "$test_home/.local/bin/course" "$course_path"
-grep -q "$course_path" "$test_home/mpv-playlist" || fail "explicit course path was not used"
-missing_path="$test_home/missing"
-missing_output="$test_home/course-missing.out"
-if PATH="$fake_mpv_bin:$test_home/.local/bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" "$test_home/.local/bin/course" "$missing_path" >"$missing_output" 2>&1; then
-  fail "missing course directory was accepted"
-fi
-grep -q "Course directory not found: $(cd "$(dirname "$missing_path")" && pwd -P)/missing" "$missing_output" || fail "missing directory error was unclear"
-! grep -Eq -- '--vo=kitty|vo=kitty' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "Kitty video output configured"
-"$repo_root/install" install course --yes
+grep -q '^auto-window-resize=no$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv window resize option missing"
+grep -q '^directory-mode=recursive$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv directory mode missing"
+grep -q '^directory-filter-types=video$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv directory filter missing"
+[[ ! -e "$test_home/.local/bin/course" && ! -e "$test_home/.local/bin/course-play" ]] || fail "course commands were installed"
+mkdir -p "$test_home/videos"
+(cd "$test_home/videos" && PATH="$test_home/.local/bin:$fake_mpv_bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" mpv)
+grep -qxF '.' "$test_home/mpv-args" || fail "mpv wrapper did not open the current directory"
+PATH="$test_home/.local/bin:$fake_mpv_bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" mpv --version
+grep -qxF -- '--version' "$test_home/mpv-args" || fail "mpv wrapper did not forward arguments"
+"$repo_root/install" install mpv --yes
+grep -q '^directory-mode=recursive$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv config was not idempotent"
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"

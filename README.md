@@ -2,7 +2,7 @@
 
 Small, independent tmux and Neovim configuration for macOS and Linux.
 
-Install both components on a new machine:
+Install the dotfiles components on a new machine:
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/IFAKA/dotfiles/main/bootstrap)
@@ -16,8 +16,9 @@ Each user has their own checkout, configuration, backups, and package state.
 dotfiles install tmux
 dotfiles install nvim
 dotfiles install
-dotfiles update [tmux|nvim]
-dotfiles uninstall [tmux|nvim]
+dotfiles install mpv
+dotfiles update [tmux|nvim|mpv]
+dotfiles uninstall [tmux|nvim|mpv]
 dotfiles --dry-run
 ```
 
@@ -52,48 +53,25 @@ The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.
 
-## Terminal-first course workflow
+## mpv playback
 
-Install the course workflow and its Homebrew dependencies on macOS:
-
-```bash
-dotfiles install course --yes
-```
-
-This installs Ghostty, tmux, mpv, and ffmpeg when they are missing. The
-workflow uses native, maximized mpv for smooth GPU-accelerated playback; Kitty
-inline video is intentionally not configured because it became laggy at useful
-viewport sizes and was less efficient.
-
-The normal workflow selects a course and opens every supported video beneath
-it as one native mpv playlist, including nested `BONUSES` and `AUDIO` folders:
+Install mpv and its managed configuration:
 
 ```bash
-course
-course <query>
-course "/path/to/course"
+dotfiles install mpv --yes
 ```
 
-With multiple courses, `course` shows a small selector with discovered video
-counts and remembers the last course. It restores the exact last played lesson
-and timestamp through mpv's native watch-later files. `course <query>` filters
-course names, while an explicit directory still opens directly. mpv opens as a
-maximized window with its title bar visible
-and uses native `--playlist-start=auto` and watch-later
-files to resume the last video and timestamp. State is stored atomically
-outside the course folders at `~/.local/state/course/state.json` (or
-`$XDG_STATE_HOME`), and
-downloaded courses are never modified.
+From inside a directory, run `mpv` with no arguments; it will build a recursive
+video playlist from the current directory. Passing a directory explicitly works
+the same way:
 
-The thin `course-play` wrapper records the current video and marks it complete
-only after roughly 90% playback plus a minimum amount of continuous watching;
-mpv remains responsible for timestamp resume through its native watch-later
-files. Seeking near the end briefly will not count as completion.
+```bash
+cd "/path/to/videos"
+mpv
 
-Set `COURSE_DIR` to change the default directory. In mpv, `g` then `p` opens the
-searchable playlist picker; type part of a lesson name to select it. `F8` shows
-the playlist. `Enter` advances to the next lesson, `Space` pauses/plays, `Left/Right` seeks, `Up/Down` seek
-farther, `[` and `]` change playback speed, `Backspace` resets speed, `f`
-toggles fullscreen, and `q` quits. mpv saves playback positions. All `.mp4`
-files remain eligible lessons; `AUDIO` is not silently discarded and `BONUSES`
-remains in playlist order.
+mpv "/path/to/videos"
+```
+
+Use `g` then `p` to open mpv's built-in searchable playlist picker and select a
+video by name. mpv also remembers playback positions, keeps the window
+maximized, and does not resize it when changing between videos.
