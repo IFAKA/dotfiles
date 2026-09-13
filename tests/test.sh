@@ -19,7 +19,7 @@ bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 help=$("$repo_root/install" --help)
-grep -q 'tmux|nvim|mpv' <<<"$help" || fail "help output"
+grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
@@ -32,6 +32,7 @@ fake_mpv_bin=$(mktemp -d "$test_home/fake-mpv-bin.XXXXXX")
 cat > "$fake_mpv_bin/mpv" <<'EOF'
 #!/usr/bin/env bash
 printf '%s\n' "$@" > "${MPV_ARGS_FILE:?}"
+printf '%s\n' "$PWD" > "${MPV_PWD_FILE:-/dev/null}"
 EOF
 chmod +x "$fake_mpv_bin/mpv"
 "$repo_root/install" install mpv --yes
@@ -42,7 +43,18 @@ grep -q '^save-position-on-quit=yes$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "m
 grep -q '^auto-window-resize=no$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv window resize option missing"
 grep -q '^directory-mode=recursive$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv directory mode missing"
 grep -q '^directory-filter-types=video$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv directory filter missing"
-[[ ! -e "$test_home/.local/bin/course" && ! -e "$test_home/.local/bin/course-play" ]] || fail "course commands were installed"
+mkdir -p "$test_home/Courses/Old Course" "$test_home/Courses/New Course"
+touch -t 202001010000 "$test_home/Courses/Old Course"
+touch -t 202501010000 "$test_home/Courses/New Course"
+"$repo_root/install" install course --yes
+assert_file "$test_home/.local/bin/course"
+rm -f "$test_home/mpv-args" "$test_home/mpv-pwd"
+(PATH="$fake_mpv_bin:$PATH" COURSE_DIR="$test_home/Courses" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PWD_FILE="$test_home/mpv-pwd" "$test_home/.local/bin/course")
+grep -qxF "$test_home/Courses/New Course" "$test_home/mpv-pwd" || fail "course did not launch mpv in the latest course"
+touch -t 202601010000 "$test_home/Courses/Old Course"
+rm -f "$test_home/mpv-pwd"
+(PATH="$fake_mpv_bin:$PATH" COURSE_DIR="$test_home/Courses" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PWD_FILE="$test_home/mpv-pwd" "$test_home/.local/bin/course")
+grep -qxF "$test_home/Courses/New Course" "$test_home/mpv-pwd" || fail "course did not reuse the last watched course"
 mkdir -p "$test_home/videos"
 (cd "$test_home/videos" && PATH="$test_home/.local/bin:$fake_mpv_bin:$PATH" MPV_ARGS_FILE="$test_home/mpv-args" mpv)
 grep -qxF '.' "$test_home/mpv-args" || fail "mpv wrapper did not open the current directory"

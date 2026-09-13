@@ -18,19 +18,20 @@ data_root="${XDG_DATA_HOME:-$HOME/.local/share}/dotfiles"
 nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
+course_marker="$config_root/.dotfiles-course-managed"
 tmux_files=(tmux.conf git-status.sh program-name.sh codex-status.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua lsp/ts_ls.lua lsp/html.lua lsp/cssls.lua lsp/jsonls.lua lsp/tailwindcss.lua lsp/eslint.lua lsp/lua_ls.lua lsp/pyright.lua lsp/gopls.lua lsp/clangd.lua lsp/rust_analyzer.lua)
 
 usage() {
   cat <<'EOF'
-  dotfiles — independent tmux, Neovim, and mpv configuration
+  dotfiles — independent tmux, Neovim, mpv, and course launcher configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [tmux|nvim|mpv] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [tmux|nvim|mpv|course] [--yes] [--dry-run]
 
 Actions:
-  install       Install both components (default)
+  install       Install all configured components (default)
   update        Pull the checkout and reinstall the selected component
   uninstall     Remove only managed files (with a backup)
 
@@ -71,6 +72,9 @@ install_packages() {
     command -v rust-analyzer >/dev/null 2>&1 || packages+=(rust-analyzer)
   fi
   if selected mpv; then
+    command -v mpv >/dev/null 2>&1 || packages+=(mpv)
+  fi
+  if selected course; then
     command -v mpv >/dev/null 2>&1 || packages+=(mpv)
   fi
   [[ "$dry_run" == true ]] && { echo "  Would install packages: ${packages[*]:-none}"; return; }
@@ -115,6 +119,17 @@ install_mpv() {
   chmod +x "$HOME/.local/bin/mpv"
   printf 'dotfiles manages mpv/mpv.conf.\n' > "$mpv_marker"
   echo "  mpv configuration installed (backup: $backup)"
+}
+
+install_course() {
+  selected course || return 0
+  [[ -f "$repo_dir/bin/course" ]] || die "Invalid course component in checkout"
+  local backup="$HOME/.local/bin/course.backup.$(date +%s)"
+  if [[ "$dry_run" == true ]]; then echo "  Would install course launcher into $HOME/.local/bin"; return; fi
+  copy_file "$repo_dir/bin/course" "$HOME/.local/bin/course" "$backup"
+  chmod +x "$HOME/.local/bin/course"
+  printf 'dotfiles manages ~/.local/bin/course.\n' > "$course_marker"
+  echo "  course launcher installed (backup: $backup)"
 }
 
 install_language_servers() {
@@ -196,6 +211,16 @@ uninstall_component() {
     echo "  mpv uninstall is manual because mpv.conf may contain merged user settings. Review the mpv backup before removing files."
     return
   fi
+  if [[ "$kind" == course ]]; then
+    [[ -f "$course_marker" ]] || { echo "  course is not managed; nothing removed."; return; }
+    local course_file="$HOME/.local/bin/course" course_backup="$HOME/.local/bin/course.uninstall-backup.$(date +%s)"
+    confirm "Remove managed course launcher?" || return
+    if [[ "$dry_run" == true ]]; then echo "  Would remove $course_file"; return; fi
+    if [[ -f "$course_file" ]]; then cp -p "$course_file" "$course_backup"; rm -f "$course_file"; fi
+    rm -f "$course_marker"
+    echo "  Removed course launcher (backup: $course_backup)"
+    return
+  fi
   confirm "Remove managed $kind files?" || return
   if [[ "$dry_run" == true ]]; then echo "  Would remove managed $kind files from $dest"; return; fi
   if [[ "$kind" == nvim ]]; then
@@ -222,7 +247,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      tmux|nvim|mpv) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      tmux|nvim|mpv|course) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -237,11 +262,12 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected mpv && uninstall_component mpv; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected mpv && uninstall_component mpv; selected course && uninstall_component course; exit 0; fi
 install_packages "$os"
 check_nvim
 install_tmux
 install_nvim
 install_language_servers
 install_mpv
+install_course
 echo "dotfiles $action complete."

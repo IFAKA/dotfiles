@@ -1,0 +1,34 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+course_dir="${COURSE_DIR:-$HOME/Documents/Courses}"
+[[ -d "$course_dir" ]] || { echo "Course directory does not exist: $course_dir" >&2; exit 1; }
+state_file="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/course"
+
+if [[ -f "$state_file" ]]; then
+  last_course=$(<"$state_file")
+  if [[ -d "$last_course" && "$last_course" == "$course_dir"/* ]]; then
+    cd "$last_course"
+    exec mpv
+  fi
+fi
+
+latest_dir=
+latest_mtime=0
+while IFS= read -r -d '' candidate; do
+  if [[ "$(uname -s)" == Darwin ]]; then
+    mtime=$(stat -f '%m' "$candidate")
+  else
+    mtime=$(stat -c '%Y' "$candidate")
+  fi
+  if [[ -z "$latest_dir" || "$mtime" -gt "$latest_mtime" ]]; then
+    latest_dir="$candidate"
+    latest_mtime="$mtime"
+  fi
+done < <(find "$course_dir" -mindepth 1 -maxdepth 1 -type d -print0)
+
+[[ -n "$latest_dir" ]] || { echo "No course directories found in: $course_dir" >&2; exit 1; }
+mkdir -p "$(dirname "$state_file")"
+printf '%s\n' "$latest_dir" > "$state_file"
+cd "$latest_dir"
+exec mpv

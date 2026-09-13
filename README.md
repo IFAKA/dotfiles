@@ -59,6 +59,7 @@ Install mpv and its managed configuration:
 
 ```bash
 dotfiles install mpv --yes
+dotfiles install course --yes
 ```
 
 From inside a directory, run `mpv` with no arguments; it will build a recursive
@@ -75,3 +76,7 @@ mpv "/path/to/videos"
 Use `g` then `p` to open mpv's built-in searchable playlist picker and select a
 video by name. mpv also remembers playback positions, keeps the window
 maximized, and does not resize it when changing between videos.
+
+Run `course` to enter the last course you watched under `~/Documents/Courses`
+(or `$COURSE_DIR`) and launch its recursive mpv playlist. On the first run, it
+uses the most recently modified course directory; deleted courses are skipped.
