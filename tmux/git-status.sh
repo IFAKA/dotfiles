@@ -114,34 +114,7 @@ if (( ${#files[@]} > 0 )); then
   (( page_end > ${#files[@]} )) && page_end=${#files[@]}
 
   display_files=()
-  for index in "${!files[@]}"; do
-    filename=${files[index]}
-    stem=$filename
-    if [[ "$filename" == *.* && "$filename" != .* ]]; then
-      stem=${filename%.*}
-    elif [[ "$filename" == .*.* ]]; then
-      stem=${filename%.*}
-    fi
-
-    show_extension=0
-    for other_index in "${!files[@]}"; do
-      [[ "$other_index" == "$index" ]] && continue
-      other=${files[other_index]}
-      other_stem=$other
-      if [[ "$other" == *.* && "$other" != .* ]]; then
-        other_stem=${other%.*}
-      elif [[ "$other" == .*.* ]]; then
-        other_stem=${other%.*}
-      fi
-      if [[ "$stem" == "$other_stem" ]]; then
-        show_extension=1
-        break
-      fi
-    done
-
-    if [[ "$filename" == *.* ]] && (( show_extension == 0 )); then
-      filename=${filename%.*}
-    fi
+  for filename in "${files[@]}"; do
     display_files+=( "$filename" )
   done
 
