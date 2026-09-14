@@ -111,7 +111,8 @@ fi
 # visible while the user is composing a prompt.
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
   if [[ "$busy" == 1 ]]; then
-    frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    # Four-dot Braille pulse using only the lower four positions: 3, 4, 7, 8.
+    frames=('⣀' '⣄' '⣌' '⣈')
     frame=$(( (frame + 1) % ${#frames[@]} ))
     write_state
     start_refresh_watcher
@@ -126,7 +127,8 @@ fi
 # is active.
 if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
   busy=1
-  frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+  # Four-dot Braille pulse using only the lower four positions: 3, 4, 7, 8.
+  frames=('⣀' '⣄' '⣌' '⣈')
   frame=$(( (frame + 1) % ${#frames[@]} ))
   write_state
   start_refresh_watcher
