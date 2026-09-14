@@ -18,8 +18,11 @@ pairs meet a 4.5:1 WCAG AA contrast target for the bold status labels. The
 script uses Git and standard shell tools only and never changes repository
 state.
 
-`tmux/tmux.conf` renders the script output on the right side of the status bar
-and refreshes it every five seconds. The installer manages the script alongside
+`tmux/tmux.conf` renders the script output on the right side of the status bar.
+The status segments are emitted in reverse visual order so the branch remains
+the far-right anchor: `stash`, `behind`, `ahead`, `untracked`, `modified`,
+`staged`, `conflict`, then branch. No divider characters are used; spacing and
+contrasting colors provide the separation. The installer manages the script alongside
 `tmux.conf`, preserving the existing backup and uninstall behavior.
 
 Tests cover script output for clean, counted changes, stashed, detached, and
