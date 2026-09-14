@@ -32,7 +32,10 @@ information on the right side of the status bar. Git information is for the
 active pane's working directory: it displays the branch (or detached commit)
 and named, color-coded change counts. Filenames are intentionally omitted so
 the status remains stable and glanceable. The stash count is shown when one
-exists. Reinstall after pulling changes with:
+exists. Resource figures are sampled every five seconds by default while the
+status bar continues refreshing once per second for interactive state. Set
+`TMUX_RESOURCE_STATUS_INTERVAL` to change the sampling interval. Reinstall
+after pulling changes with:
 
 ```bash
 dotfiles install tmux --yes
@@ -51,9 +54,9 @@ labels; this keeps simultaneous Codex conversations in the same repository
 independent. If no pane title is available, it falls back to the active
 working directory in Codex's local session database. Unknown applications use
 their executable name. Codex windows also show
-a compact pane-state icon: an animated single-character Braille spinner while
-active, `⚠` when confirmation appears to be required, `✓` when ready for the
-next prompt in a background window, and nothing when there is no active state.
+a compact pane-state icon: `✦` while idle, an animated single-character Braille
+spinner while active, `⚠` when confirmation appears to be required, and `✓`
+when ready for the next prompt in a background window.
 The completion check disappears while you are viewing that window.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for

@@ -138,7 +138,11 @@ if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:sp
     fi
     write_state
   fi
-  [[ "$notified" == 1 ]] && printf '✓\n'
+  if [[ "$notified" == 1 ]]; then
+    printf '✓\n'
+  else
+    printf '✦\n'
+  fi
 else
   exit 0
 fi
