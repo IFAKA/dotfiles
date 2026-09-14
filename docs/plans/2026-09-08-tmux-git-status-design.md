@@ -13,7 +13,8 @@ commit). A clean tree shows only the branch; otherwise named counts identify
 `conflict`, `staged`, `modified`, and `untracked` changes. Non-zero upstream
 divergence is shown with `ahead`/`behind`, and stashes with `stash`. Each status
 kind is rendered as its own color-coded segment; filenames are omitted. Long
-branch names are truncated to keep the segment compact. The
+branch names are truncated to keep the segment compact. Foreground/background
+pairs meet a 4.5:1 WCAG AA contrast target for the bold status labels. The
 script uses Git and standard shell tools only and never changes repository
 state.
 

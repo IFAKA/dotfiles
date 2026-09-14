@@ -92,9 +92,9 @@ printf 'fourth\n' > "$git_repo/fourth.txt"
 assert_output "$(git_status_output "$git_repo")" 'main │ staged 1 │ modified 1 │ untracked 3 '
 git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
 [[ "$git_status_raw" != *'tracked.txt'* ]] || fail "changed filenames are still rendered"
-grep -q 'bg=colour22.*staged 1' <<<"$git_status_raw" || fail "staged status color missing"
+grep -q 'fg=colour255,bg=colour22.*staged 1' <<<"$git_status_raw" || fail "staged status color missing"
 grep -q 'bg=colour136.*modified 1' <<<"$git_status_raw" || fail "modified status color missing"
-grep -q 'bg=colour238.*untracked 3' <<<"$git_status_raw" || fail "untracked status color missing"
+grep -q 'fg=colour255,bg=colour238.*untracked 3' <<<"$git_status_raw" || fail "untracked status color missing"
 
 conflict_repo=$(mktemp -d "$test_home/conflict-repo.XXXXXX")
 git -C "$conflict_repo" init -q

@@ -88,7 +88,7 @@ stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
 
 status_foreground() {
   case "$1" in
-    conflict|behind|stash) printf '255' ;;
+    staged|conflict|untracked|behind|stash) printf '255' ;;
     *) printf '232' ;;
   esac
 }
@@ -99,9 +99,9 @@ status_background() {
     staged) printf 'colour22' ;;
     modified) printf 'colour136' ;;
     untracked) printf 'colour238' ;;
-    ahead) printf 'colour30' ;;
+    ahead) printf 'colour37' ;;
     behind) printf 'colour55' ;;
-    stash) printf 'colour97' ;;
+    stash) printf 'colour90' ;;
     *) printf 'colour235' ;;
   esac
 }
