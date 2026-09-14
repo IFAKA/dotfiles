@@ -38,10 +38,12 @@ write_state() {
 }
 
 print_loading_marquee() {
-  local marquee='⠟⠁⠮⠵ ⠗⠪ ⠮⠵' viewport_width=3 marquee_end
-  marquee="  ${marquee}  "
+  # Show one cell at a time. The refresh watcher runs every 100 ms; four
+  # refreshes per cell keeps the phrase readable without feeling sluggish.
+  local marquee='⠟⠁⠮⠵ ⠗⠪ ⠮⠵' viewport_width=1 marquee_end
+  marquee="${marquee}  "
   marquee_end=$(( ${#marquee} - viewport_width ))
-  if (( marquee_tick >= 2 )); then
+  if (( marquee_tick >= 3 )); then
     frame=$(( (frame + 1) % (marquee_end + 1) ))
     marquee_tick=0
   else
