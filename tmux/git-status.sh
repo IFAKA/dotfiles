@@ -106,13 +106,12 @@ status_background() {
   esac
 }
 
-printf '#[fg=colour255,bg=colour24,bold] %s ' "$branch"
-for (( index = 0; index < ${#status_kinds[@]}; index++ )); do
+for (( index = ${#status_kinds[@]} - 1; index >= 0; index-- )); do
   kind=${status_kinds[index]}
   foreground=$(status_foreground "$kind")
   background=$(status_background "$kind")
   attributes=',bold'
-  printf '#[fg=colour250,bg=colour235]│#[fg=colour%s,bg=%s%s] %s %s ' \
+  printf '#[fg=colour%s,bg=%s%s] %s %s ' \
     "$foreground" "$background" "$attributes" "${status_labels[index]}" "${status_counts[index]}"
 done
-printf '#[default]\n'
+printf '#[fg=colour255,bg=colour24,bold] %s #[default]\n' "$branch"
