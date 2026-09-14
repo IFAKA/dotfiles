@@ -27,10 +27,11 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows Git information for the active pane's working directory in the
-right side of the status bar. It displays the branch (or detached commit) and
-named, color-coded change counts. Filenames are intentionally omitted so the
-status remains stable and glanceable. The stash count is shown when one
+tmux shows the top CPU and memory-consuming processes immediately before Git
+information on the right side of the status bar. Git information is for the
+active pane's working directory: it displays the branch (or detached commit)
+and named, color-coded change counts. Filenames are intentionally omitted so
+the status remains stable and glanceable. The stash count is shown when one
 exists. Reinstall after pulling changes with:
 
 ```bash

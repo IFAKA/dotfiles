@@ -13,9 +13,13 @@ assert_output() { [[ "$1" == "$2" ]] || fail "expected '$2', got '$1'"; }
 git_status_output() {
   "$repo_root/tmux/git-status.sh" "$1" | sed -E 's/#\[[^]]*\]//g; s/^ //; s/  +/ /g'
 }
+resource_status_output() {
+  "$repo_root/tmux/resource-status.sh" | sed -E 's/#\[[^]]*\]//g; s/  +/ /g'
+}
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
+bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
@@ -67,6 +71,7 @@ grep -qxF -- '--version' "$test_home/mpv-args" || fail "mpv wrapper did not forw
 "$repo_root/install" install mpv --yes
 grep -q '^directory-mode=recursive$' "$XDG_CONFIG_HOME/mpv/mpv.conf" || fail "mpv config was not idempotent"
 assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
+assert_file "$XDG_CONFIG_HOME/tmux/resource-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
@@ -168,7 +173,13 @@ assert_output "$(git_status_output "$test_home")" ''
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
 cat > "$fake_bin/ps" <<'EOF'
 #!/usr/bin/env bash
-if [[ "$1" == '-o' && "$2" == 'command=' ]]; then
+if [[ "$1" == '-eo' ]]; then
+  cat <<'PROCESS_LIST'
+  101  42.4  3.2 node
+  102   7.1 18.4 WindowServer
+  103  12.9  4.0 bash
+PROCESS_LIST
+elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
   case "$4" in
     123) echo 'nvim --embed' ;;
     124) echo '/usr/bin/neovim --embed' ;;
@@ -178,6 +189,7 @@ if [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" 'CPU 42% node MEM 18% WindowServer '
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
@@ -186,6 +198,10 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" '✦ Codex'
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
 grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
+status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")
+resource_position=${status_right%%resource-status.sh*}
+git_position=${status_right%%git-status.sh*}
+[[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && ${#resource_position} -lt ${#git_position} ]] || fail "resource status is not before git status"
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
@@ -212,7 +228,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"
