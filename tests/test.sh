@@ -86,20 +86,20 @@ printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?3 staged │ tracked │ fourth'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?3 untracked │ …'
-git_status_raw=$($repo_root/tmux/git-status.sh "$git_repo")
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?3 staged │ tracked │ fourth…'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?3 …untracked'
+git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
 grep -q 'fg=colour114,bg=colour238.*staged' <<<"$git_status_raw" || fail "staged filename color missing"
 grep -q 'fg=colour221,bg=colour238.*tracked' <<<"$git_status_raw" || fail "unstaged filename color missing"
 printf 'typescript\n' > "$git_repo/index.ts"
 printf 'javascript\n' > "$git_repo/index.js"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?5 staged │ tracked │ fourth'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?5 index.js │ index.ts │ untracked │ …'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?5 staged │ tracked │ fourth…'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?5 …index.js │ index.ts │ untracked'
 printf 'sixth\n' > "$git_repo/sixth.txt"
 printf 'seventh\n' > "$git_repo/seventh.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?7 staged │ tracked │ fourth'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?7 index.js │ index.ts │ seventh'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=6 git_status_output "$git_repo")" 'main +1 ~1 ?7 sixth │ untracked │ …'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'main +1 ~1 ?7 staged │ tracked │ fourth…'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" 'main +1 ~1 ?7 …index.js │ index.ts │ seventh…'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=6 git_status_output "$git_repo")" 'main +1 ~1 ?7 …sixth │ untracked'
 git_status_raw=$("$repo_root/tmux/git-status.sh" "$git_repo")
 grep -q 'fg=colour244,bg=colour238' <<<"$git_status_raw" || fail "untracked files are not muted"
 
@@ -114,6 +114,25 @@ collision_status_raw=$("$repo_root/tmux/git-status.sh" "$collision_repo")
 grep -q 'index.ts' <<<"$collision_status_raw" || fail "collision extension missing"
 grep -q 'index.js' <<<"$collision_status_raw" || fail "collision extension missing"
 grep -q 'fg=colour244,bg=colour238.*index.ts' <<<"$collision_status_raw" || fail "untracked filename color missing"
+
+conflict_repo=$(mktemp -d "$test_home/conflict-repo.XXXXXX")
+git -C "$conflict_repo" init -q
+git -C "$conflict_repo" branch -M main
+git -C "$conflict_repo" config user.email test@example.com
+git -C "$conflict_repo" config user.name test
+printf '%s' base > "$conflict_repo/conflict.txt"
+git -C "$conflict_repo" add conflict.txt
+git -C "$conflict_repo" commit -qm initial
+git -C "$conflict_repo" checkout -qb side
+printf '%s' side > "$conflict_repo/conflict.txt"
+git -C "$conflict_repo" commit -qam side
+git -C "$conflict_repo" checkout -q main
+printf '%s' main > "$conflict_repo/conflict.txt"
+git -C "$conflict_repo" commit -qam main
+git -C "$conflict_repo" merge side >/dev/null 2>&1 || true
+conflict_status_raw=$("$repo_root/tmux/git-status.sh" "$conflict_repo")
+grep -q 'fg=colour255,bg=colour124,bold.*conflict' <<<"$conflict_status_raw" || fail "conflicted filename contrast missing"
+
 git -C "$git_repo" stash push -uqm changed
 assert_output "$(git_status_output "$git_repo")" 'main *1 '
 git -C "$git_repo" checkout --detach -q

@@ -84,9 +84,17 @@ filename_color() {
     staged) printf '114' ;;    # green
     unstaged) printf '221' ;;  # yellow
     untracked) printf '244' ;; # dim gray
-    conflict) printf '196' ;;  # red
+    conflict) printf '255' ;;  # white on the conflict background
     *) printf '255' ;;         # neutral / ellipsis
   esac
+}
+
+filename_background() {
+  [[ "$1" == conflict ]] && printf 'colour124' || printf 'colour238'
+}
+
+filename_attributes() {
+  [[ "$1" == conflict ]] && printf ',bold' || true
 }
 
 # Keep the branch/status group visually separate from the changed-file group.
@@ -141,23 +149,29 @@ if (( ${#files[@]} > 0 )); then
   rendered=0
   for (( index = page_start; index < page_end; index++ )); do
     filename=${display_files[index]}
-    color=$(filename_color "${file_states[index]}")
+    if (( rendered == 0 && page > 0 )); then
+      filename="…$filename"
+    fi
+    if (( index == page_end - 1 && page < page_count - 1 )); then
+      filename="${filename}…"
+    fi
+    state=${file_states[index]}
+    color=$(filename_color "$state")
+    background=$(filename_background "$state")
+    attributes=$(filename_attributes "$state")
 
     if (( rendered == 0 )); then
       printf ' '
     else
       printf ' #[fg=colour250,bg=colour238]│'
-      printf '#[fg=colour%s,bg=colour238]' "$color"
+      printf '#[fg=colour%s,bg=%s%s]' "$color" "$background" "$attributes"
       printf ' %s' "$filename"
     fi
     if (( rendered == 0 )); then
-      printf '#[fg=colour%s,bg=colour238]' "$color"
+      printf '#[fg=colour%s,bg=%s%s]' "$color" "$background" "$attributes"
       printf '%s' "$filename"
     fi
     rendered=$((rendered + 1))
   done
-  if (( page == page_count - 1 && ${#files[@]} > page_size )); then
-    printf ' #[fg=colour250,bg=colour238]│#[fg=colour255,bg=colour238] …'
-  fi
 fi
 printf '#[default]\n'
