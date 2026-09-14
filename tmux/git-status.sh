@@ -42,10 +42,10 @@ file_states=()
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   :
 else
-  (( conflicts > 0 )) && status+=" !${conflicts}"
-  (( staged > 0 )) && status+=" +${staged}"
-  (( unstaged > 0 )) && status+=" ~${unstaged}"
-  (( untracked > 0 )) && status+=" ?${untracked}"
+  (( conflicts > 0 )) && status+=" conflict ${conflicts}"
+  (( staged > 0 )) && status+=" staged ${staged}"
+  (( unstaged > 0 )) && status+=" modified ${unstaged}"
+  (( untracked > 0 )) && status+=" untracked ${untracked}"
 
   while IFS= read -r line; do
     [[ -n "$line" ]] || continue
@@ -72,12 +72,12 @@ fi
 if git -C "$directory" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
   divergence=$(git -C "$directory" rev-list --left-right --count HEAD...@{upstream} 2>/dev/null || printf '0 0')
   read -r ahead behind <<< "$divergence"
-  (( ahead > 0 )) && status+=" ↑${ahead}"
-  (( behind > 0 )) && status+=" ↓${behind}"
+  (( ahead > 0 )) && status+=" ahead ${ahead}"
+  (( behind > 0 )) && status+=" behind ${behind}"
 fi
 
 stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
-(( stash_count > 0 )) && status+=" *${stash_count}"
+(( stash_count > 0 )) && status+=" stash ${stash_count}"
 
 filename_color() {
   case "$1" in

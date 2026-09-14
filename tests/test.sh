@@ -82,27 +82,27 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$(git_status_output "$git_repo")" 'main '
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$(git_status_output "$git_repo")" 'tracked.txt │ main ~1'
+assert_output "$(git_status_output "$git_repo")" 'tracked.txt │ main modified 1'
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main +1 ~1 ?3'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…untracked.txt │ main +1 ~1 ?3'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 3'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…untracked.txt │ main staged 1 modified 1 untracked 3'
 git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
 grep -q 'fg=colour114,bg=colour238.*staged' <<<"$git_status_raw" || fail "staged filename color missing"
 grep -q 'fg=colour221,bg=colour238.*tracked' <<<"$git_status_raw" || fail "unstaged filename color missing"
 printf 'typescript\n' > "$git_repo/index.ts"
 printf 'javascript\n' > "$git_repo/index.js"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main +1 ~1 ?5'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ untracked.txt │ main +1 ~1 ?5'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 5'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ untracked.txt │ main staged 1 modified 1 untracked 5'
 printf 'sixth\n' > "$git_repo/sixth.txt"
 printf 'seventh\n' > "$git_repo/seventh.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main +1 ~1 ?7'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ seventh.txt… │ main +1 ~1 ?7'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=6 git_status_output "$git_repo")" '…sixth.txt │ untracked.txt │ main +1 ~1 ?7'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 7'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ seventh.txt… │ main staged 1 modified 1 untracked 7'
+assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=6 git_status_output "$git_repo")" '…sixth.txt │ untracked.txt │ main staged 1 modified 1 untracked 7'
 git_status_raw=$("$repo_root/tmux/git-status.sh" "$git_repo")
 grep -q 'fg=colour244,bg=colour238' <<<"$git_status_raw" || fail "untracked files are not muted"
 
@@ -134,7 +134,7 @@ printf 'two\n' > "$width_repo/$long_two"
 printf 'three\n' > "$width_repo/$long_three"
 width_output=$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$width_repo")
 [[ ${#width_output} -le 120 ]] || fail "filename/status output exceeded status-right-length"
-[[ "$width_output" == *'main ?3'* ]] || fail "width test status group missing"
+[[ "$width_output" == *'main untracked 3'* ]] || fail "width test status group missing"
 [[ "$width_output" != *"$long_one"* ]] || fail "long filename was not shortened"
 grep -qE '…[^ ]+\.ts' <<<"$width_output" || fail "shortened filename extension missing"
 [[ "$width_output" == *' │ main'* ]] || fail "filenames did not render before status"
@@ -194,9 +194,9 @@ conflict_status_raw=$("$repo_root/tmux/git-status.sh" "$conflict_repo")
 grep -q 'fg=colour255,bg=colour124,bold.*conflict' <<<"$conflict_status_raw" || fail "conflicted filename contrast missing"
 
 git -C "$git_repo" stash push -uqm changed
-assert_output "$(git_status_output "$git_repo")" 'main *1 '
+assert_output "$(git_status_output "$git_repo")" 'main stash 1 '
 git -C "$git_repo" checkout --detach -q
-assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) *1 "
+assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) stash 1 "
 assert_output "$(git_status_output "$test_home")" ''
 
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
