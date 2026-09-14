@@ -56,7 +56,10 @@ install_packages() {
     echo "  Skipping OS package installation (DOTFILES_SKIP_PACKAGES=true)"
     return
   fi
-  if selected tmux && ! command -v tmux >/dev/null 2>&1; then packages+=(tmux); fi
+  if selected tmux; then
+    command -v tmux >/dev/null 2>&1 || packages+=(tmux)
+    command -v lazygit >/dev/null 2>&1 || packages+=(lazygit)
+  fi
   if selected nvim; then
     command -v nvim >/dev/null 2>&1 || packages+=(neovim)
     command -v git >/dev/null 2>&1 || packages+=(git)

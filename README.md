@@ -37,6 +37,11 @@ one exists. Reinstall after pulling changes with:
 dotfiles install tmux --yes
 ```
 
+Press `C-b` then `g` from any tmux pane to open LazyGit in a large popup rooted
+in that pane's current directory. Close LazyGit to return to the underlying
+pane. The tmux installer provisions LazyGit with the same native package
+manager used for tmux. Reload an active tmux server with `C-b` then `r`.
+
 tmux also names windows from the application running in the active pane. For a
 Codex pane, the managed helper uses that pane's Codex title and displays the
 conversation name, such as
