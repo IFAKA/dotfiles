@@ -117,11 +117,18 @@ fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
 cat > "$fake_bin/ps" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == '-o' && "$2" == 'command=' ]]; then
-  echo 'node /fake/path/codex'
+  case "$4" in
+    123) echo 'nvim --embed' ;;
+    124) echo '/usr/bin/neovim --embed' ;;
+    125) echo 'vim' ;;
+    *) echo 'node /fake/path/codex' ;;
+  esac
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123 "$git_repo" 'First conversation')" '✦ First conversation'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" '✦ Second conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" '✦ First conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" '✦ Codex'

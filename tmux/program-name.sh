@@ -60,7 +60,7 @@ find_application() {
       fi
       return 0
       ;;
-    *nvim*|*neovim*) echo "nvim"; return 0 ;;
+    *nvim*|*neovim*) echo ""; return 0 ;;
     *vim*) echo "vim"; return 0 ;;
     *lazygit*) echo "lazygit"; return 0 ;;
     *python*|*pyright*) echo "python"; return 0 ;;
