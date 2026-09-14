@@ -19,20 +19,37 @@ read_state() {
   busy=0
   watcher_pid=0
   frame=0
+  marquee_tick=0
   if [[ -f "$state_file" ]]; then
-    read -r notified busy watcher_pid frame < "$state_file" || true
+    read -r notified busy watcher_pid frame marquee_tick < "$state_file" || true
     [[ "$notified" =~ ^[01]$ ]] || notified=0
     [[ "$busy" =~ ^[01]$ ]] || busy=0
     [[ "$watcher_pid" =~ ^[0-9]+$ ]] || watcher_pid=0
     [[ "$frame" =~ ^[0-9]+$ ]] || frame=0
+    [[ "$marquee_tick" =~ ^[0-9]+$ ]] || marquee_tick=0
   fi
 }
 
 write_state() {
   local temporary
   temporary=$(mktemp "$state_dir/.state.XXXXXX")
-  printf '%s %s %s %s\n' "$notified" "$busy" "$watcher_pid" "$frame" >"$temporary"
+  printf '%s %s %s %s %s\n' "$notified" "$busy" "$watcher_pid" "$frame" "$marquee_tick" >"$temporary"
   mv -f "$temporary" "$state_file"
+}
+
+print_loading_marquee() {
+  local marquee='⠟⠁⠮⠵ ⠗⠪ ⠮⠵' viewport_width=3 marquee_end
+  marquee="  ${marquee}  "
+  marquee_end=$(( ${#marquee} - viewport_width ))
+  if (( marquee_tick >= 2 )); then
+    frame=$(( (frame + 1) % (marquee_end + 1) ))
+    marquee_tick=0
+  else
+    marquee_tick=$((marquee_tick + 1))
+  fi
+  write_state
+  start_refresh_watcher
+  printf ' %s\n' "${marquee:frame:viewport_width}"
 }
 
 start_refresh_watcher() {
@@ -111,12 +128,7 @@ fi
 # visible while the user is composing a prompt.
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
   if [[ "$busy" == 1 ]]; then
-    # Four-dot Braille pulse using only the lower four positions: 3, 4, 7, 8.
-    frames=('⣀' '⣄' '⣌' '⣈')
-    frame=$(( (frame + 1) % ${#frames[@]} ))
-    write_state
-    start_refresh_watcher
-    printf ' %s\n' "${frames[$frame]}"
+    print_loading_marquee
   else
     printf ' ✦\n'
   fi
@@ -127,12 +139,7 @@ fi
 # is active.
 if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
   busy=1
-  # Four-dot Braille pulse using only the lower four positions: 3, 4, 7, 8.
-  frames=('⣀' '⣄' '⣌' '⣈')
-  frame=$(( (frame + 1) % ${#frames[@]} ))
-  write_state
-  start_refresh_watcher
-  printf ' %s\n' "${frames[$frame]}"
+  print_loading_marquee
   exit 0
 fi
 
