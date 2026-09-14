@@ -39,7 +39,6 @@ read -r staged unstaged untracked conflicts < <(
 status="$branch"
 files=()
 file_states=()
-overflow_index=-1
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   :
 else
@@ -67,17 +66,7 @@ else
     else
       file_states+=(unstaged)
     fi
-    (( ${#files[@]} >= 3 )) && break
   done <<< "$git_status"
-
-  if (( ${#files[@]} == 3 )); then
-    changed_count=$(printf '%s\n' "$git_status" | awk 'NF { count++ } END { print count + 0 }')
-    if (( changed_count > 3 )); then
-      # Attach the overflow marker to the last visible filename instead of
-      # rendering a nameless marker between filenames.
-      overflow_index=2
-    fi
-  fi
 fi
 
 if git -C "$directory" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; then
@@ -107,7 +96,16 @@ filename_color() {
 # conflicted. The branch/status counters remain useful for the totals.
 printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
 if (( ${#files[@]} > 0 )); then
-  printf '#[fg=colour255,bg=colour238]'
+  timestamp=${TMUX_GIT_STATUS_TIMESTAMP:-$(date +%s)}
+  [[ "$timestamp" =~ ^[0-9]+$ ]] || timestamp=$(date +%s)
+  page_size=3
+  page_count=$(( (${#files[@]} + page_size - 1) / page_size ))
+  page=$(( (timestamp / 3) % page_count ))
+  page_start=$(( page * page_size ))
+  page_end=$(( page_start + page_size ))
+  (( page_end > ${#files[@]} )) && page_end=${#files[@]}
+
+  display_files=()
   for index in "${!files[@]}"; do
     filename=${files[index]}
     stem=$filename
@@ -136,25 +134,30 @@ if (( ${#files[@]} > 0 )); then
     if [[ "$filename" == *.* ]] && (( show_extension == 0 )); then
       filename=${filename%.*}
     fi
+    display_files+=( "$filename" )
+  done
 
+  printf '#[fg=colour255,bg=colour238]'
+  rendered=0
+  for (( index = page_start; index < page_end; index++ )); do
+    filename=${display_files[index]}
     color=$(filename_color "${file_states[index]}")
 
-    if (( index == 0 )); then
+    if (( rendered == 0 )); then
       printf ' '
     else
       printf ' #[fg=colour250,bg=colour238]│'
       printf '#[fg=colour%s,bg=colour238]' "$color"
       printf ' %s' "$filename"
-      if (( index == overflow_index )); then
-        printf '…'
-      fi
-      continue
     fi
-    printf '#[fg=colour%s,bg=colour238]' "$color"
-    printf '%s' "$filename"
-    if (( index == overflow_index )); then
-      printf '…'
+    if (( rendered == 0 )); then
+      printf '#[fg=colour%s,bg=colour238]' "$color"
+      printf '%s' "$filename"
     fi
+    rendered=$((rendered + 1))
   done
+  if (( page == page_count - 1 && ${#files[@]} > page_size )); then
+    printf ' #[fg=colour250,bg=colour238]│#[fg=colour255,bg=colour238] …'
+  fi
 fi
 printf '#[default]\n'
