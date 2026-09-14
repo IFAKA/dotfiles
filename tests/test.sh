@@ -81,6 +81,38 @@ grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmu
 grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"
 grep -q '^set -g @easy-motion-auto-begin-selection "true"$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion auto-selection missing"
 grep -q "^set -g @easy-motion-binding-bd-w 'm'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "bidirectional word motion missing"
+
+fake_tmux_bin=$(mktemp -d "$test_home/fake-tmux-bin.XXXXXX")
+fake_plugin_dir="$XDG_CONFIG_HOME/tmux/plugins/tmux-easy-motion/scripts"
+mkdir -p "$fake_plugin_dir"
+cat > "$fake_tmux_bin/tmux" <<'EOF'
+#!/usr/bin/env bash
+if [[ "$*" == *"#{selection_present}"* ]]; then
+  printf '%s\n' "${FAKE_TMUX_SELECTION_PRESENT:-0}"
+elif [[ "$*" == *"#{session_id}"* ]]; then
+  printf 'session-id\n'
+elif [[ "$*" == *"#{window_id}"* ]]; then
+  printf 'window-id\n'
+elif [[ "$*" == *"#{pane_id}"* ]]; then
+  printf 'pane-id\n'
+fi
+EOF
+chmod +x "$fake_tmux_bin/tmux"
+cat > "$fake_plugin_dir/easy_motion.sh" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$*" > "${EASY_MOTION_ARGS_FILE:?}"
+EOF
+chmod +x "$fake_plugin_dir/easy_motion.sh"
+FAKE_TMUX_SELECTION_PRESENT=0 EASY_MOTION_ARGS_FILE="$test_home/easy-motion-start.args" \
+  TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
+  TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
+  bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
+grep -q ' pane-id bd-w$' "$test_home/easy-motion-start.args" || fail "EasyMotion START motion is not bd-w"
+FAKE_TMUX_SELECTION_PRESENT=1 EASY_MOTION_ARGS_FILE="$test_home/easy-motion-end.args" \
+  TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
+  TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
+  bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
+grep -q ' pane-id bd-e$' "$test_home/easy-motion-end.args" || fail "EasyMotion END motion is not bd-e"
 "$repo_root/install" install tmux --yes
 
 git_repo=$(mktemp -d "$test_home/git-repo.XXXXXX")
