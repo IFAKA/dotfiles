@@ -97,12 +97,11 @@ filename_attributes() {
   [[ "$1" == conflict ]] && printf ',bold' || true
 }
 
-# Keep the branch/status group visually separate from the changed-file group.
+# Keep the changed-file group first, followed by the branch/status group.
 # The file group uses a contrasting background, while each filename is split
 # by a high-contrast vertical rule for quick scanning in the status line. The
 # filename color shows Git state directly: staged, unstaged, untracked, or
 # conflicted. The branch/status counters remain useful for the totals.
-printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
 if (( ${#files[@]} > 0 )); then
   timestamp=${TMUX_GIT_STATUS_TIMESTAMP:-$(date +%s)}
   [[ "$timestamp" =~ ^[0-9]+$ ]] || timestamp=$(date +%s)
@@ -146,5 +145,8 @@ if (( ${#files[@]} > 0 )); then
     fi
     rendered=$((rendered + 1))
   done
+  printf ' #[fg=colour250,bg=colour238]│#[fg=colour255,bg=colour24,bold] %s' "$status"
+else
+  printf '#[fg=colour255,bg=colour24,bold] %s ' "$status"
 fi
 printf '#[default]\n'
