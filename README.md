@@ -53,8 +53,11 @@ conversation name, such as
 labels; this keeps simultaneous Codex conversations in the same repository
 independent. If no pane title is available, it falls back to the active
 working directory in Codex's local session database. Unknown applications use
-their executable name. Window tabs stay focused on the application or
-conversation name; Codex activity remains visible in the pane itself.
+their executable name. Codex windows also show a compact pane-state icon: `✦`
+while idle, a one-character-at-a-time Braille marquee while active, `⚠` when
+confirmation appears to be required, and `✓` when ready for the next prompt in
+a background window. The completion check disappears while you are viewing
+that window.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.

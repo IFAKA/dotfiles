@@ -22,7 +22,7 @@ bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
-! grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is still rendered in window tabs"
+grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
