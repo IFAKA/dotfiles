@@ -13,7 +13,7 @@ window_id=$(tmux display-message -p '#{window_id}')
 pane_id=$(tmux display-message -p '#{pane_id}')
 
 motion=bd-w
-if [[ "$(tmux display-message -p -t "$pane_id" '#{selection_present}')" == 1 ]]; then
+if [[ -n "$(tmux display-message -p -t "$pane_id" '#{selection_start_x}')" ]]; then
   motion=bd-e
 fi
 
