@@ -102,16 +102,23 @@ status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—][[:space
 if grep -Eiq '^[[:space:]]*(Allow|Approve|Run this command|Would you like to|Continue)[^[:cntrl:]]*(\?|$)|^[[:space:]]*[\[(][Yy]/[Nn][\])]' <<<"$recent"; then
   busy=1
   write_state
-  printf '⚠\n'
+  printf ' ⚠\n'
   exit 0
 fi
 
-# A non-empty prompt can also remain on screen while Codex is working, so this
-# check intentionally comes after confirmation and activity detection.
+# A non-empty prompt can remain on screen while Codex is working. Preserve the
+# existing busy state while it is present; otherwise keep the idle AI icon
+# visible while the user is composing a prompt.
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
-  busy=1
-  write_state
-  start_refresh_watcher
+  if [[ "$busy" == 1 ]]; then
+    frames=('⠋' '⠙' '⠹' '⠸' '⠼' '⠴' '⠦' '⠧' '⠇' '⠏')
+    frame=$(( (frame + 1) % ${#frames[@]} ))
+    write_state
+    start_refresh_watcher
+    printf ' %s\n' "${frames[$frame]}"
+  else
+    printf ' ✦\n'
+  fi
   exit 0
 fi
 
@@ -123,11 +130,11 @@ if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Readin
   frame=$(( (frame + 1) % ${#frames[@]} ))
   write_state
   start_refresh_watcher
-  printf '%s\n' "${frames[$frame]}"
+  printf ' %s\n' "${frames[$frame]}"
   exit 0
 fi
 
-if [[ -n "$current_prompt" ]]; then
+if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
   if [[ "$busy" == 1 ]]; then
     busy=0
     if [[ "$window_active" == 1 ]]; then
@@ -138,9 +145,9 @@ if [[ -n "$current_prompt" ]]; then
     write_state
   fi
   if [[ "$notified" == 1 ]]; then
-    printf '✓\n'
+    printf ' ✓\n'
   else
-    printf '✦\n'
+    printf ' ✦\n'
   fi
 else
   exit 0
