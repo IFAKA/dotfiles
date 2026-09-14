@@ -82,98 +82,19 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$(git_status_output "$git_repo")" 'main '
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$(git_status_output "$git_repo")" 'tracked.txt │ main modified 1'
+assert_output "$(git_status_output "$git_repo")" 'main │ modified 1 '
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 3'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…untracked.txt │ main staged 1 modified 1 untracked 3'
+assert_output "$(git_status_output "$git_repo")" 'main │ staged 1 │ modified 1 │ untracked 3 '
 git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
-grep -q 'fg=colour114,bg=colour238.*staged' <<<"$git_status_raw" || fail "staged filename color missing"
-grep -q 'fg=colour221,bg=colour238.*tracked' <<<"$git_status_raw" || fail "unstaged filename color missing"
-printf 'typescript\n' > "$git_repo/index.ts"
-printf 'javascript\n' > "$git_repo/index.js"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 5'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ untracked.txt │ main staged 1 modified 1 untracked 5'
-printf 'sixth\n' > "$git_repo/sixth.txt"
-printf 'seventh\n' > "$git_repo/seventh.txt"
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$git_repo")" 'staged.txt │ tracked.txt │ fourth.txt… │ main staged 1 modified 1 untracked 7'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$git_repo")" '…index.js │ index.ts │ seventh.txt… │ main staged 1 modified 1 untracked 7'
-assert_output "$(TMUX_GIT_STATUS_TIMESTAMP=6 git_status_output "$git_repo")" '…sixth.txt │ untracked.txt │ main staged 1 modified 1 untracked 7'
-git_status_raw=$("$repo_root/tmux/git-status.sh" "$git_repo")
-grep -q 'fg=colour244,bg=colour238' <<<"$git_status_raw" || fail "untracked files are not muted"
-
-collision_repo=$(mktemp -d "$test_home/collision-repo.XXXXXX")
-git -C "$collision_repo" init -q
-git -C "$collision_repo" branch -M main
-git -C "$collision_repo" config user.email test@example.com
-git -C "$collision_repo" config user.name test
-printf 'typescript\n' > "$collision_repo/index.ts"
-printf 'javascript\n' > "$collision_repo/index.js"
-collision_status_raw=$("$repo_root/tmux/git-status.sh" "$collision_repo")
-grep -q 'index.ts' <<<"$collision_status_raw" || fail "collision extension missing"
-grep -q 'index.js' <<<"$collision_status_raw" || fail "collision extension missing"
-grep -q 'fg=colour244,bg=colour238.*index.ts' <<<"$collision_status_raw" || fail "untracked filename color missing"
-
-width_repo=$(mktemp -d "$test_home/width-repo.XXXXXX")
-git -C "$width_repo" init -q
-git -C "$width_repo" branch -M main
-git -C "$width_repo" config user.email test@example.com
-git -C "$width_repo" config user.name test
-printf 'base\n' > "$width_repo/base.txt"
-git -C "$width_repo" add base.txt
-git -C "$width_repo" commit -qm initial
-long_one='prefix-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa-one.ts'
-long_two='prefix-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb-two.ts'
-long_three='prefix-cccccccccccccccccccccccccccccccccccccccccccccc-three.ts'
-printf 'one\n' > "$width_repo/$long_one"
-printf 'two\n' > "$width_repo/$long_two"
-printf 'three\n' > "$width_repo/$long_three"
-width_output=$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$width_repo")
-[[ ${#width_output} -le 120 ]] || fail "filename/status output exceeded status-right-length"
-[[ "$width_output" == *'main untracked 3'* ]] || fail "width test status group missing"
-[[ "$width_output" != *"$long_one"* ]] || fail "long filename was not shortened"
-grep -qE '…[^ ]+\.ts' <<<"$width_output" || fail "shortened filename extension missing"
-[[ "$width_output" == *' │ main'* ]] || fail "filenames did not render before status"
-parent_repo=$(mktemp -d "$test_home/parent-repo.XXXXXX")
-git -C "$parent_repo" init -q
-git -C "$parent_repo" branch -M main
-git -C "$parent_repo" config user.email test@example.com
-git -C "$parent_repo" config user.name test
-mkdir -p "$parent_repo/src/api" "$parent_repo/src/ui"
-printf 'api\n' > "$parent_repo/src/api/index.ts"
-printf 'ui\n' > "$parent_repo/src/ui/index.ts"
-git -C "$parent_repo" add src
-git -C "$parent_repo" commit -qm initial
-printf 'changed\n' >> "$parent_repo/src/api/index.ts"
-printf 'changed\n' >> "$parent_repo/src/ui/index.ts"
-parent_output=$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$parent_repo")
-parent_output+=$'\n'"$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$parent_repo")"
-grep -q 'api/index.ts' <<<"$parent_output" || fail "minimum parent directory missing"
-grep -q 'ui/index.ts' <<<"$parent_output" || fail "minimum parent directory missing"
-
-cross_page_repo=$(mktemp -d "$test_home/cross-page-repo.XXXXXX")
-git -C "$cross_page_repo" init -q
-git -C "$cross_page_repo" branch -M main
-git -C "$cross_page_repo" config user.email test@example.com
-git -C "$cross_page_repo" config user.name test
-printf 'base\n' > "$cross_page_repo/base.txt"
-git -C "$cross_page_repo" add base.txt
-git -C "$cross_page_repo" commit -qm initial
-common_prefix='shared-prefix-aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-common_suffix='shared-suffix-bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb'
-for suffix in one two three four; do
-  printf '%s\n' "$suffix" > "$cross_page_repo/${common_prefix}-${suffix}-${common_suffix}.ts"
-done
-cross_page_first=$(TMUX_GIT_STATUS_TIMESTAMP=0 git_status_output "$cross_page_repo")
-cross_page_second=$(TMUX_GIT_STATUS_TIMESTAMP=3 git_status_output "$cross_page_repo")
-[[ "$cross_page_first" != *"${common_prefix}-one-${common_suffix}.ts"* ]] || fail "cross-page names were not shortened"
-[[ "$cross_page_second" != *"${common_prefix}-four-${common_suffix}.ts"* ]] || fail "cross-page names were not shortened"
-first_hash=$(printf '%s' "${common_prefix}-one-${common_suffix}.ts" | shasum -a 256 | cut -c1-12)
-grep -q "…${first_hash}" <<<"$cross_page_first$cross_page_second" || fail "deterministic fallback identifier missing"
+[[ "$git_status_raw" != *'tracked.txt'* ]] || fail "changed filenames are still rendered"
+grep -q 'bg=colour22.*staged 1' <<<"$git_status_raw" || fail "staged status color missing"
+grep -q 'bg=colour136.*modified 1' <<<"$git_status_raw" || fail "modified status color missing"
+grep -q 'bg=colour238.*untracked 3' <<<"$git_status_raw" || fail "untracked status color missing"
 
 conflict_repo=$(mktemp -d "$test_home/conflict-repo.XXXXXX")
 git -C "$conflict_repo" init -q
@@ -191,12 +112,12 @@ printf '%s' main > "$conflict_repo/conflict.txt"
 git -C "$conflict_repo" commit -qam main
 git -C "$conflict_repo" merge side >/dev/null 2>&1 || true
 conflict_status_raw=$("$repo_root/tmux/git-status.sh" "$conflict_repo")
-grep -q 'fg=colour255,bg=colour124,bold.*conflict' <<<"$conflict_status_raw" || fail "conflicted filename contrast missing"
+grep -q 'fg=colour255,bg=colour124,bold] conflict 1' <<<"$conflict_status_raw" || fail "conflict status color missing"
 
 git -C "$git_repo" stash push -uqm changed
-assert_output "$(git_status_output "$git_repo")" 'main stash 1 '
+assert_output "$(git_status_output "$git_repo")" 'main │ stash 1 '
 git -C "$git_repo" checkout --detach -q
-assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) stash 1 "
+assert_output "$(git_status_output "$git_repo")" "$(git -C "$git_repo" rev-parse --short HEAD) │ stash 1 "
 assert_output "$(git_status_output "$test_home")" ''
 
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")

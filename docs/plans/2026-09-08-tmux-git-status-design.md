@@ -11,8 +11,9 @@ directory in the tmux status bar.
 a Git work tree, and prints the current branch (or abbreviated detached
 commit). A clean tree shows only the branch; otherwise named counts identify
 `conflict`, `staged`, `modified`, and `untracked` changes. Non-zero upstream
-divergence is shown with `ahead`/`behind`, and stashes with `stash`. Long branch
-names are truncated to keep the segment compact. The
+divergence is shown with `ahead`/`behind`, and stashes with `stash`. Each status
+kind is rendered as its own color-coded segment; filenames are omitted. Long
+branch names are truncated to keep the segment compact. The
 script uses Git and standard shell tools only and never changes repository
 state.
 
