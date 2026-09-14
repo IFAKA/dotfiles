@@ -5,7 +5,7 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 test_home=$(mktemp -d /tmp/dotfiles-test.XXXXXX)
 trap 'rm -rf "$test_home"' EXIT
 export HOME="$test_home" XDG_CONFIG_HOME="$test_home/.config" XDG_DATA_HOME="$test_home/.local/share"
-export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true
+export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true DOTFILES_SKIP_TMUX_PLUGINS=true
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_file() { [[ -f "$1" ]] || fail "missing file: $1"; }
@@ -18,13 +18,15 @@ bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
+bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
-dry_run=$(PATH="$test_home/minimal-bin:/usr/bin:/bin" DOTFILES_SKIP_PACKAGES=false "$repo_root/install" install tmux --dry-run 2>&1)
+dry_run=$(PATH="$test_home/minimal-bin:/usr/bin:/bin" DOTFILES_SKIP_PACKAGES=false DOTFILES_SKIP_TMUX_PLUGINS=false "$repo_root/install" install tmux --dry-run 2>&1)
 grep -q 'lazygit' <<<"$dry_run" || fail "tmux dry-run does not provision lazygit"
+grep -q 'Would install tmux plugins' <<<"$dry_run" || fail "tmux dry-run does not provision plugins"
 
 "$repo_root/install" install tmux --yes
 
@@ -68,8 +70,16 @@ assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
 grep -q '^bind g display-popup -E -w 95% -h 95% -d "#{pane_current_path}" lazygit$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "lazygit popup binding missing"
+grep -q "^set -g mode-keys vi$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux vi mode missing"
+grep -q "^bind -T copy-mode-vi Space run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion Space binding missing"
+grep -q "^bind -T copy-mode-vi v send-keys -X begin-selection$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "character selection binding missing"
+grep -q "^bind -T copy-mode-vi V send-keys -X select-line$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "line selection binding missing"
+grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux-easy-motion plugin missing"
+grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"
+grep -q "^set -g @easy-motion-binding-bd-w 'm'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "bidirectional word motion missing"
 "$repo_root/install" install tmux --yes
 
 git_repo=$(mktemp -d "$test_home/git-repo.XXXXXX")
@@ -167,7 +177,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

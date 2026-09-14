@@ -19,7 +19,7 @@ nvim_marker="$config_root/nvim/.dotfiles-nvim-managed"
 tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
-tmux_files=(tmux.conf git-status.sh program-name.sh codex-status.sh)
+tmux_files=(tmux.conf git-status.sh program-name.sh codex-status.sh easy-motion-default.sh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua lsp/ts_ls.lua lsp/html.lua lsp/cssls.lua lsp/jsonls.lua lsp/tailwindcss.lua lsp/eslint.lua lsp/lua_ls.lua lsp/pyright.lua lsp/gopls.lua lsp/clangd.lua lsp/rust_analyzer.lua)
 
@@ -59,6 +59,12 @@ install_packages() {
   if selected tmux; then
     command -v tmux >/dev/null 2>&1 || packages+=(tmux)
     command -v lazygit >/dev/null 2>&1 || packages+=(lazygit)
+    command -v git >/dev/null 2>&1 || packages+=(git)
+    if [[ "$os" == Darwin ]]; then
+      command -v python >/dev/null 2>&1 || packages+=(python)
+    else
+      command -v python >/dev/null 2>&1 || packages+=(python3)
+    fi
   fi
   if selected nvim; then
     command -v nvim >/dev/null 2>&1 || packages+=(neovim)
@@ -172,6 +178,33 @@ copy_file() {
   cp -p "$source" "$dest"
 }
 
+install_tmux_plugins() {
+  selected tmux || return 0
+  local plugin_root="$config_root/tmux/plugins"
+  local tpm_dir="$plugin_root/tpm"
+  local easy_motion_dir="$plugin_root/tmux-easy-motion"
+  if [[ "$(printenv DOTFILES_SKIP_TMUX_PLUGINS || true)" == true ]]; then
+    echo "  Skipping tmux plugin installation (DOTFILES_SKIP_TMUX_PLUGINS=true)"
+    return
+  fi
+  if [[ "$dry_run" == true ]]; then
+    echo "  Would install tmux plugins into $plugin_root"
+    return
+  fi
+  command -v git >/dev/null 2>&1 || die "git is required to install tmux plugins"
+  mkdir -p "$plugin_root"
+  if [[ ! -x "$tpm_dir/tpm" ]]; then
+    [[ ! -e "$tpm_dir" ]] || die "TPM path exists but is not a valid TPM checkout: $tpm_dir"
+    git clone --depth 1 https://github.com/tmux-plugins/tpm.git "$tpm_dir"
+  fi
+  if [[ ! -f "$easy_motion_dir/easy_motion.tmux" ]]; then
+    [[ ! -e "$easy_motion_dir" ]] || die "EasyMotion path exists but is not a valid checkout: $easy_motion_dir"
+    git clone --depth 1 https://github.com/IngoMeyer441/tmux-easy-motion.git "$easy_motion_dir"
+  fi
+  [[ -f "$easy_motion_dir/easy_motion.tmux" ]] || die "tmux-easy-motion installation failed"
+  echo "  tmux plugins installed (TPM, tmux-easy-motion)"
+}
+
 install_nvim() {
   selected nvim || return 0
   local dest backup file
@@ -269,6 +302,7 @@ if [[ "$action" == uninstall ]]; then selected nvim && uninstall_component nvim;
 install_packages "$os"
 check_nvim
 install_tmux
+install_tmux_plugins
 install_nvim
 install_language_servers
 install_mpv
