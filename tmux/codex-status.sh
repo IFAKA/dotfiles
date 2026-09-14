@@ -42,6 +42,7 @@ print_loading_marquee() {
   local marquee='⠟⠁⠮⠵⠗⠪⠮⠵' viewport_width=1 marquee_end
   marquee_end=$(( ${#marquee} - viewport_width ))
   if (( marquee_tick >= 0 )); then
+    printf ' %s\n' "${marquee:frame:viewport_width}"
     frame=$(( (frame + 1) % (marquee_end + 1) ))
     marquee_tick=0
   else
@@ -49,7 +50,6 @@ print_loading_marquee() {
   fi
   write_state
   start_refresh_watcher
-  printf ' %s\n' "${marquee:frame:viewport_width}"
 }
 
 start_refresh_watcher() {
@@ -138,6 +138,10 @@ fi
 # These phrases are emitted in the live status line while a turn or MCP tool
 # is active.
 if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
+  if [[ "$busy" != 1 ]]; then
+    frame=0
+    marquee_tick=0
+  fi
   busy=1
   print_loading_marquee
   exit 0

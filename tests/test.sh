@@ -24,6 +24,8 @@ bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 grep -q "viewport_width=1" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee is not one character wide"
 grep -q "sleep 0.18" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee cadence is too slow"
+grep -q "local marquee='⠟⠁⠮⠵⠗⠪⠮⠵'" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee sequence changed"
+grep -q 'frame=0' "$repo_root/tmux/codex-status.sh" || fail "Codex marquee does not reset to its first cell"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
