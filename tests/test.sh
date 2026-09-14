@@ -22,10 +22,7 @@ bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
-grep -q "viewport_width=1" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee is not one character wide"
-grep -q "sleep 0.18" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee cadence is too slow"
-grep -q "local marquee='⠟⠁⠮⠵⠗⠪⠮⠵'" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee sequence changed"
-grep -q 'frame=0' "$repo_root/tmux/codex-status.sh" || fail "Codex marquee does not reset to its first cell"
+! grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is still rendered in window tabs"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
@@ -179,9 +176,9 @@ cat > "$fake_bin/ps" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$1" == '-eo' ]]; then
   cat <<'PROCESS_LIST'
-  101  42.4  3.2 node
-  102   7.1 18.4 WindowServer
-  103  12.9  4.0 bash
+  101  42.4  3.2 node /fake/path/codex.js --server
+  102   7.1 18.4 /System/Library/WindowServer
+  103  12.9  4.0 /bin/bash
 PROCESS_LIST
 elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
   case "$4" in
@@ -193,10 +190,11 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" 'CPU 42% node MEM 18% WindowServer '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" 'CPU 42% node:codex MEM 18% WindowServer '
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'renaming...')" 'Codex'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" 'Second conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" 'First conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" 'Codex'

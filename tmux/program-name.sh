@@ -43,6 +43,9 @@ clean_codex_title() {
   if [[ -n "$pane_name" && "$title" == *" | $pane_name" ]]; then
     title=${title%" | $pane_name"}
   fi
+  # Codex uses this transient title while it updates the conversation name;
+  # codex-status.sh already exposes the active loading state in the status bar.
+  [[ "$title" == 'renaming...' ]] && return 0
   [[ -n "$title" ]] && printf '%s' "$title"
 }
 

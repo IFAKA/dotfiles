@@ -21,13 +21,33 @@ if [[ -n "${TMUX:-}" ]]; then
 fi
 
 if [[ -z "$usage" ]]; then
-  processes=$(LC_ALL=C ps -eo pid=,pcpu=,pmem=,comm= 2>/dev/null) || exit 0
+  # Keep the full command line so interpreter-backed processes such as
+  # `node /path/to/codex` can be identified more precisely than just `node`.
+  processes=$(LC_ALL=C ps -eo pid=,pcpu=,pmem=,command= 2>/dev/null) || exit 0
   [[ -n "$processes" ]] || exit 0
 
   usage=$(printf '%s\n' "$processes" | awk '
+  function basename(path, parts, count) {
+    count = split(path, parts, "/")
+    return parts[count]
+  }
+  function process_label(command, executable, argument, i) {
+    executable = basename($4)
+    # The executable name is generic for runtimes; include the first script or
+    # jar they are running when it is present.
+    if (executable ~ /^(node|nodejs|bun|deno|python|python[0-9.]+|ruby|java)$/) {
+      for (i = 5; i <= NF; i++) {
+        if ($i !~ /^-/ && $i != "") {
+          argument = basename($i)
+          sub(/\.(cjs|js|mjs|py|rb|jar|ts)$/, "", argument)
+          return executable ":" argument
+        }
+      }
+    }
+    return executable
+  }
   $1 ~ /^[0-9]+$/ && $2 ~ /^[0-9]+(\.[0-9]+)?$/ && $3 ~ /^[0-9]+(\.[0-9]+)?$/ && $4 != "" {
-    command = $4
-    sub(".*/", "", command)
+    command = process_label($0)
     if (cpu_command == "" || ($2 + 0) > cpu) {
       cpu = $2 + 0
       cpu_command = command
