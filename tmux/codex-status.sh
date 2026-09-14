@@ -38,12 +38,10 @@ write_state() {
 }
 
 print_loading_marquee() {
-  # Show one cell at a time. The refresh watcher runs every 100 ms; four
-  # refreshes per cell keeps the phrase readable without feeling sluggish.
-  local marquee='⠟⠁⠮⠵ ⠗⠪ ⠮⠵' viewport_width=1 marquee_end
-  marquee="${marquee}  "
+  # Show one cell at a time from the compact FAKA sequence.
+  local marquee='⠟⠁⠮⠵⠗⠪⠮⠵' viewport_width=1 marquee_end
   marquee_end=$(( ${#marquee} - viewport_width ))
-  if (( marquee_tick >= 3 )); then
+  if (( marquee_tick >= 0 )); then
     frame=$(( (frame + 1) % (marquee_end + 1) ))
     marquee_tick=0
   else
@@ -77,7 +75,7 @@ start_refresh_watcher() {
         while IFS= read -r client_name; do
           tmux refresh-client -S -t "$client_name" 2>/dev/null || true
         done
-      sleep 0.1
+      sleep 0.18
     done
   "
   watcher_pid=0

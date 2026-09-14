@@ -23,7 +23,7 @@ bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syn
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 grep -q "viewport_width=1" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee is not one character wide"
-grep -q "marquee_tick >= 3" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee cadence is too fast"
+grep -q "sleep 0.18" "$repo_root/tmux/codex-status.sh" || fail "Codex marquee cadence is too slow"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
