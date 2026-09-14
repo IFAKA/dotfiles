@@ -14,7 +14,7 @@ git_status_output() {
   "$repo_root/tmux/git-status.sh" "$1" | sed -E 's/#\[[^]]*\]//g; s/^ //; s/  +/ /g'
 }
 resource_status_output() {
-  "$repo_root/tmux/resource-status.sh" | sed -E 's/#\[[^]]*\]//g; s/  +/ /g'
+  env -u TMUX "$repo_root/tmux/resource-status.sh" | sed -E 's/#\[[^]]*\]//g; s/  +/ /g'
 }
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"

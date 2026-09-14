@@ -97,22 +97,21 @@ recent=$(tail -n 12 <<<"$screen")
 current_prompt=$(tail -n 8 <<<"$screen" | grep -E '^[[:space:]]*›' | tail -n 1 || true)
 status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—][[:space:]]' | tail -n 1 || true)
 
-# While the user is typing, leave the tab clean. The empty input prompt is
-# also rendered while Codex is working, so it must not take precedence over
-# confirmation or activity text in the captured pane.
-if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
-  busy=1
-  write_state
-  start_refresh_watcher
-  exit 0
-fi
-
 # Only inspect the live prompt/status area. Searching the whole transcript
 # makes ordinary words in Codex's explanations look like state changes.
 if grep -Eiq '^[[:space:]]*(Allow|Approve|Run this command|Would you like to|Continue)[^[:cntrl:]]*(\?|$)|^[[:space:]]*[\[(][Yy]/[Nn][\])]' <<<"$recent"; then
   busy=1
   write_state
   printf '⚠\n'
+  exit 0
+fi
+
+# A non-empty prompt can also remain on screen while Codex is working, so this
+# check intentionally comes after confirmation and activity detection.
+if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
+  busy=1
+  write_state
+  start_refresh_watcher
   exit 0
 fi
 
@@ -128,7 +127,7 @@ if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Readin
   exit 0
 fi
 
-if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+if [[ -n "$current_prompt" ]]; then
   if [[ "$busy" == 1 ]]; then
     busy=0
     if [[ "$window_active" == 1 ]]; then
