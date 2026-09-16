@@ -25,7 +25,7 @@ bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
-grep -q 'tmux|nvim|mpv|course' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|nvim|mpv|course' <<<"$help" || fail "help output"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
@@ -34,6 +34,24 @@ grep -q 'lazygit' <<<"$dry_run" || fail "tmux dry-run does not provision lazygit
 grep -q 'Would install tmux plugins' <<<"$dry_run" || fail "tmux dry-run does not provision plugins"
 
 "$repo_root/install" install tmux --yes
+
+"$repo_root/install" install zsh --yes
+assert_file "$XDG_CONFIG_HOME/zsh/path-navigation.zsh"
+assert_file "$test_home/.zshrc"
+grep -q '^# >>> dotfiles zsh >>>$' "$test_home/.zshrc" || fail "zsh source block missing"
+grep -q '^source "\${XDG_CONFIG_HOME:-\$HOME/.config}/zsh/path-navigation.zsh"$' "$test_home/.zshrc" || fail "zsh source path missing"
+before_zshrc=$(wc -l < "$test_home/.zshrc")
+"$repo_root/install" install zsh --yes
+after_zshrc=$(wc -l < "$test_home/.zshrc")
+[[ "$before_zshrc" == "$after_zshrc" ]] || fail "zsh installation is not idempotent"
+zsh_result=$(zsh -f -c 'zle() { :; }; source "$1"; BUFFER="cd metaData/systemObjects/20260903_CXO-4148.xml"; CURSOR=${#BUFFER}; dotfiles-backward-kill-path-component; print -r -- "$BUFFER"' _ "$repo_root/zsh/path-navigation.zsh")
+[[ "$zsh_result" == 'cd metaData/systemObjects/' ]] || fail "zsh path deletion removed the wrong text"
+zsh_result=$(zsh -f -c 'zle() { :; }; source "$1"; BUFFER="cd metaData/systemObjects/20260903_CXO-4148.xml"; CURSOR=${#BUFFER}; dotfiles-backward-kill-path-component; dotfiles-backward-kill-path-component; print -r -- "$BUFFER"' _ "$repo_root/zsh/path-navigation.zsh")
+[[ "$zsh_result" == 'cd metaData/' ]] || fail "zsh path deletion did not remove consecutive components"
+
+"$repo_root/install" uninstall zsh --yes
+[[ ! -e "$XDG_CONFIG_HOME/zsh/path-navigation.zsh" ]] || fail "zsh file was not removed"
+if grep -q 'dotfiles zsh' "$test_home/.zshrc"; then fail "zsh source block was not removed"; fi
 
 mkdir -p "$XDG_CONFIG_HOME/mpv"
 printf 'audio-device=auto\n' > "$XDG_CONFIG_HOME/mpv/mpv.conf"

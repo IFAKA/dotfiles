@@ -1,6 +1,6 @@
 # dotfiles
 
-Small, independent tmux and Neovim configuration for macOS and Linux.
+Small, independent zsh, tmux, Neovim, and mpv configuration for macOS and Linux.
 
 Install the dotfiles components on a new machine:
 
@@ -14,6 +14,7 @@ Each user has their own checkout, configuration, backups, and package state.
 
 ```bash
 dotfiles install tmux
+dotfiles install zsh
 dotfiles install nvim
 dotfiles install
 dotfiles install mpv
@@ -61,6 +62,20 @@ that window.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.
+
+## zsh path editing
+
+Install the managed zsh widget with:
+
+```bash
+dotfiles install zsh --yes
+```
+
+At an interactive zsh prompt, press `Alt-W` to delete the path component before
+the cursor. For example, `metaData/systemObjects/file.xml` becomes
+`metaData/systemObjects/`. `Ctrl-W` keeps its normal shell behavior. The zsh
+installer adds a managed source block to `~/.zshrc` and backs up that file
+before changing it.
 
 ## mpv playback
 
