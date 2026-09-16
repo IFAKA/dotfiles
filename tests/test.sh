@@ -40,14 +40,33 @@ assert_file "$XDG_CONFIG_HOME/zsh/path-navigation.zsh"
 assert_file "$test_home/.zshrc"
 grep -q '^# >>> dotfiles zsh >>>$' "$test_home/.zshrc" || fail "zsh source block missing"
 grep -q '^source "\${XDG_CONFIG_HOME:-\$HOME/.config}/zsh/path-navigation.zsh"$' "$test_home/.zshrc" || fail "zsh source path missing"
+grep -q "bindkey -M emacs '\^W' dotfiles-backward-kill-path-component" "$repo_root/zsh/path-navigation.zsh" || fail "smart Ctrl-W binding missing"
+grep -q "bindkey -M emacs -r '\^\[w'" "$repo_root/zsh/path-navigation.zsh" || fail "Alt-W binding was not removed"
 before_zshrc=$(wc -l < "$test_home/.zshrc")
 "$repo_root/install" install zsh --yes
 after_zshrc=$(wc -l < "$test_home/.zshrc")
 [[ "$before_zshrc" == "$after_zshrc" ]] || fail "zsh installation is not idempotent"
 zsh_result=$(zsh -f -c 'zle() { :; }; source "$1"; BUFFER="cd metaData/systemObjects/20260903_CXO-4148.xml"; CURSOR=${#BUFFER}; dotfiles-backward-kill-path-component; print -r -- "$BUFFER"' _ "$repo_root/zsh/path-navigation.zsh")
-[[ "$zsh_result" == 'cd metaData/systemObjects/' ]] || fail "zsh path deletion removed the wrong text"
-zsh_result=$(zsh -f -c 'zle() { :; }; source "$1"; BUFFER="cd metaData/systemObjects/20260903_CXO-4148.xml"; CURSOR=${#BUFFER}; dotfiles-backward-kill-path-component; dotfiles-backward-kill-path-component; print -r -- "$BUFFER"' _ "$repo_root/zsh/path-navigation.zsh")
+[[ "$zsh_result" == 'cd metaData/systemObjects/20260903_CXO-4148.' ]] || fail "zsh dotted component deletion"
+zsh_result=$(zsh -f -c 'zle() { :; }; source "$1"; BUFFER="cd metaData/systemObjects/20260903_CXO-4148.xml"; CURSOR=${#BUFFER}; repeat 3 { dotfiles-backward-kill-path-component }; print -r -- "$BUFFER"' _ "$repo_root/zsh/path-navigation.zsh")
 [[ "$zsh_result" == 'cd metaData/' ]] || fail "zsh path deletion did not remove consecutive components"
+widget_sequence() {
+  local input="$1" count="$2"
+  zsh -f -c 'zle() { [[ "$1" == backward-kill-word ]] || return; if [[ "$BUFFER" == *" "* ]]; then BUFFER="${BUFFER% *}"; else BUFFER=""; fi; CURSOR=${#BUFFER}; }; source "$1"; BUFFER="$2"; CURSOR=${#BUFFER}; repeat "$3" { dotfiles-backward-kill-path-component; print -r -- "$BUFFER" }' _ "$repo_root/zsh/path-navigation.zsh" "$input" "$count"
+}
+[[ "$(widget_sequence 'archive.tar.gz' 3)" == $'archive.tar.\narchive.' ]] || fail "multi-dot path deletion"
+[[ "$(widget_sequence 'filename.txt' 2)" == 'filename.' ]] || fail "single-extension deletion"
+[[ "$(widget_sequence 'curl --output=build/result.json' 3)" == $'curl --output=build/result.\ncurl --output=build/\ncurl --output=' ]] || fail "equals flag value deletion"
+[[ "$(widget_sequence 'curl --output build/result.json' 2)" == $'curl --output build/result.\ncurl --output build/' ]] || fail "separate flag value deletion"
+[[ "$(widget_sequence 'tar -xzvf archive.tar.gz' 8)" == $'tar -xzvf archive.tar.\ntar -xzvf archive.\ntar -xzvf \ntar -xzvf\ntar -xzv\ntar -xz\ntar -x\ntar' ]] || fail "grouped short flag deletion"
+[[ "$(widget_sequence 'https://example.com/users?id=42&sort=name' 4)" == $'https://example.com/users?id=42&sort=\nhttps://example.com/users?id=42&\nhttps://example.com/users?id=\nhttps://example.com/users?' ]] || fail "URL query deletion"
+[[ "$(widget_sequence 'ghcr.io/company/backend:v1.2.3' 8)" == $'ghcr.io/company/backend:v1.2.\nghcr.io/company/backend:v1.\nghcr.io/company/backend:\nghcr.io/company/\nghcr.io/\nghcr.' ]] || fail "Docker image deletion"
+json_input='{"user":{"name":"Facundo","id":42}}'
+json_expected=$'{"user":{"name":"Facundo","id":42}\n{"user":{"name":"Facundo","id":\n{"user":{"name":"Facundo","id"'
+[[ "$(widget_sequence "$json_input" 3)" == "$json_expected" ]] || fail "JSON-like deletion"
+quoted_input='cd "My Folder/file.txt"'
+[[ "$(widget_sequence "$quoted_input" 2)" == $'cd "My Folder/file.\ncd "My Folder/' ]] || fail "quoted path deletion"
+[[ "$(widget_sequence 'cd My\ Folder/file.txt' 2)" == $'cd My\\ Folder/file.\ncd My\\ Folder/' ]] || fail "escaped path deletion"
 
 "$repo_root/install" uninstall zsh --yes
 [[ ! -e "$XDG_CONFIG_HOME/zsh/path-navigation.zsh" ]] || fail "zsh file was not removed"

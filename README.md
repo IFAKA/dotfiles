@@ -71,11 +71,10 @@ Install the managed zsh widget with:
 dotfiles install zsh --yes
 ```
 
-At an interactive zsh prompt, press `Alt-W` to delete the path component before
-the cursor. For example, `metaData/systemObjects/file.xml` becomes
-`metaData/systemObjects/`. `Ctrl-W` keeps its normal shell behavior. The zsh
-installer adds a managed source block to `~/.zshrc` and backs up that file
-before changing it.
+At an interactive zsh prompt, press `Ctrl-W` to delete the context-aware unit
+before the cursor. For example, `metaData/systemObjects/file.xml` becomes
+`metaData/systemObjects/`. `Alt-W` is left unbound. The zsh installer adds a
+managed source block to `~/.zshrc` and backs up that file before changing it.
 
 ## mpv playback
 
