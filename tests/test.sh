@@ -245,7 +245,7 @@ FAKE_TMUX_SELECTION_START_X=0 EASY_MOTION_ARGS_FILE="$test_home/easy-motion-end.
   TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
   TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
   bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
-grep -q ' pane-id bd-e$' "$test_home/easy-motion-end.args" || fail "EasyMotion END motion is not bd-e"
+grep -q ' pane-id bd-E$' "$test_home/easy-motion-end.args" || fail "EasyMotion END motion is not bd-E"
 "$repo_root/install" install tmux --yes
 
 git_repo=$(mktemp -d "$test_home/git-repo.XXXXXX")

@@ -32,7 +32,7 @@ done
 
 motion=bd-w
 if [[ -n "$(tmux display-message -p -t "$pane_id" '#{selection_start_x}')" ]]; then
-  motion=bd-e
+  motion=bd-E
 fi
 
 "$plugin_dir/scripts/easy_motion.sh" \
