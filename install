@@ -20,7 +20,8 @@ tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh easy-motion-default.sh)
+tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh easy-motion-default.sh resource-monitor.sh)
+btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 
 nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp.lua lua/keymaps.lua lua/vimzap/tasks.lua lua/vimzap/projects.lua lua/vimzap/debug.lua lua/vimzap/dashboard.lua lsp/ts_ls.lua lsp/html.lua lsp/cssls.lua lsp/jsonls.lua lsp/tailwindcss.lua lsp/eslint.lua lsp/lua_ls.lua lsp/pyright.lua lsp/gopls.lua lsp/clangd.lua lsp/rust_analyzer.lua)
@@ -69,6 +70,7 @@ install_packages() {
   if selected tmux; then
     command -v tmux >/dev/null 2>&1 || packages+=(tmux)
     command -v lazygit >/dev/null 2>&1 || packages+=(lazygit)
+    command -v btop >/dev/null 2>&1 || packages+=(btop)
     command -v git >/dev/null 2>&1 || packages+=(git)
     if [[ "$os" == Darwin ]]; then
       command -v python >/dev/null 2>&1 || packages+=(python)
@@ -263,6 +265,10 @@ install_tmux() {
   for file in "${tmux_files[@]}"; do
     copy_file "$repo_dir/tmux/$file" "$dest/$file" "$backup/$file"
   done
+  mkdir -p "$config_root/btop"
+  for file in "${btop_files[@]}"; do
+    copy_file "$repo_dir/btop/$file" "$config_root/btop/$file" "$config_root/btop/$file.backup.$(date +%s)"
+  done
   printf 'dotfiles manages tmux.conf.\n' > "$tmux_marker"
   echo "  tmux installed (backup: $backup)"
 }
@@ -315,6 +321,15 @@ uninstall_component() {
       if [[ -f "$dest/$file" ]]; then mkdir -p "$backup"; cp -p "$dest/$file" "$backup/$file"; rm -f "$dest/$file"; found=true; fi
     done
     rm -f "$tmux_marker"
+    for file in "${btop_files[@]}"; do
+      if [[ -f "$config_root/btop/$file" ]]; then
+        mkdir -p "$backup/btop"
+        cp -p "$config_root/btop/$file" "$backup/btop/$file"
+        rm -f "$config_root/btop/$file"
+        found=true
+      fi
+    done
+    rmdir "$config_root/btop" 2>/dev/null || true
   fi
   [[ "$found" == true ]] && echo "  Removed managed $kind files (backup: $backup)"
   rmdir "$dest" 2>/dev/null || true

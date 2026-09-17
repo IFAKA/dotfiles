@@ -45,7 +45,10 @@ dotfiles install tmux --yes
 Press `C-Space` then `g` from any tmux pane to open LazyGit in a large popup rooted
 in that pane's current directory. Close LazyGit to return to the underlying
 pane. The tmux installer provisions LazyGit with the same native package
-manager used for tmux. Reload an active tmux server with `C-Space` then `r`.
+manager used for tmux. Press `C-Space` then `M` to open the keyboard-first btop
+resource monitor in the same style of popup. Its `j/k` process navigation and
+`h/l` panel navigation match Vim; `Shift-K` kills the selected process. Reload
+an active tmux server with `C-Space` then `r`.
 
 tmux also names windows from the application running in the active pane. For a
 Codex pane, the managed helper uses that pane's Codex title and displays the

@@ -72,5 +72,29 @@ if [[ -z "$usage" ]]; then
 fi
 
 IFS=$'\t' read -r cpu cpu_command memory memory_command <<< "$usage"
-printf '#[fg=colour81]CPU %s%% %s#[default] #[fg=colour213]MEM %s%% %s#[default] ' \
-  "$cpu" "$cpu_command" "$memory" "$memory_command"
+label_max=${TMUX_RESOURCE_STATUS_LABEL_MAX:-16}
+[[ "$label_max" =~ ^[1-9][0-9]*$ ]] || label_max=16
+shorten_label() {
+  local label="$1"
+  if (( ${#label} > label_max )); then
+    printf '%s…' "${label:0:label_max-1}"
+  else
+    printf '%s' "$label"
+  fi
+}
+cpu_command=$(shorten_label "$cpu_command")
+memory_command=$(shorten_label "$memory_command")
+severity_color() {
+  local value="$1"
+  if (( value >= 80 )); then
+    printf 'colour196'
+  elif (( value >= 50 )); then
+    printf 'colour226'
+  else
+    printf '%s' "$2"
+  fi
+}
+cpu_color=$(severity_color "$cpu" colour81)
+memory_color=$(severity_color "$memory" colour213)
+printf '#[fg=%s]CPU %s%% %s#[default] #[fg=%s]MEM %s%% %s#[default] ' \
+  "$cpu_color" "$cpu" "$cpu_command" "$memory_color" "$memory" "$memory_command"
