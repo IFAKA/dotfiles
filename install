@@ -20,7 +20,7 @@ tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh easy-motion-default.sh resource-monitor.sh)
+tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 
@@ -216,6 +216,7 @@ install_tmux_plugins() {
   local plugin_root="$config_root/tmux/plugins"
   local tpm_dir="$plugin_root/tpm"
   local easy_motion_dir="$plugin_root/tmux-easy-motion"
+  local agent_usage_dir="$plugin_root/agent-usage-tmux"
   if [[ "$(printenv DOTFILES_SKIP_TMUX_PLUGINS || true)" == true ]]; then
     echo "  Skipping tmux plugin installation (DOTFILES_SKIP_TMUX_PLUGINS=true)"
     return
@@ -235,7 +236,12 @@ install_tmux_plugins() {
     git clone --depth 1 https://github.com/IngoMeyer441/tmux-easy-motion.git "$easy_motion_dir"
   fi
   [[ -f "$easy_motion_dir/easy_motion.tmux" ]] || die "tmux-easy-motion installation failed"
-  echo "  tmux plugins installed (TPM, tmux-easy-motion)"
+  if [[ ! -f "$agent_usage_dir/agent-usage.tmux" ]]; then
+    [[ ! -e "$agent_usage_dir" ]] || die "agent-usage-tmux path exists but is not a valid checkout: $agent_usage_dir"
+    git clone --depth 1 https://github.com/artischocki/agent-usage-tmux.git "$agent_usage_dir"
+  fi
+  [[ -x "$agent_usage_dir/scripts/agent_usage.sh" ]] || die "agent-usage-tmux installation failed"
+  echo "  tmux plugins installed (TPM, tmux-easy-motion, agent-usage-tmux)"
 }
 
 install_nvim() {

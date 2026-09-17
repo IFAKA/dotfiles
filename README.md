@@ -45,6 +45,10 @@ after pulling changes with:
 dotfiles install tmux --yes
 ```
 
+The right side also shows Codex's `5h` and `wk` usage windows when Codex is
+authenticated locally. The usage helper comes from
+`artischocki/agent-usage-tmux` and stays blank when no usage data is available.
+
 Press `C-Space` then `g` from any tmux pane to open LazyGit in a large popup rooted
 in that pane's current directory. Close LazyGit to return to the underlying
 pane. The tmux installer provisions LazyGit with the same native package

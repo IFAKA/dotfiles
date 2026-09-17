@@ -22,7 +22,9 @@ bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
+bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
+grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
@@ -122,6 +124,7 @@ assert_file "$XDG_CONFIG_HOME/tmux/resource-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/resource-monitor.sh"
 assert_file "$XDG_CONFIG_HOME/btop/btop.conf"
@@ -281,7 +284,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"
