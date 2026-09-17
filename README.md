@@ -29,9 +29,9 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows compact, color-graded CPU and memory percentages immediately before
-Git information on the right side of the status bar, for example `CPU 16% |
-MEM  4%`. The full process list and process names are available in the btop
+tmux shows compact, color-graded `CPU | MEM` labels immediately before Git
+information on the right side of the status bar. Each label changes color based
+on its current usage; the full process list and process names are available in the btop
 popup. Git information is for the
 active pane's working directory: it displays the branch (or detached commit)
 and named, color-coded change counts. Filenames are intentionally omitted so
