@@ -19,21 +19,22 @@ format_reset() {
   fi
 }
 
-percentage_color() {
+remaining_color() {
   local value="$1"
-  if (( value <= 20 )); then
-    printf 'colour114'
+  # The fetcher returns remaining capacity: 100 means a full window and 0
+  # means exhausted. Keep the color scale aligned with that meaning.
+  if (( value <= 10 )); then
+    printf 'colour196'
+  elif (( value <= 25 )); then
+    printf 'colour203'
   elif (( value <= 40 )); then
-    printf 'colour150'
+    printf 'colour215'
   elif (( value <= 60 )); then
     printf 'colour186'
-  elif (( value <= 75 )); then
-    printf 'colour215'
-  elif (( value <= 90 )); then
-    printf 'colour203'
+  elif (( value <= 80 )); then
+    printf 'colour150'
   else
-    # Light red keeps the warning state readable on colour238.
-    printf 'colour224'
+    printf 'colour114'
   fi
 }
 
@@ -43,7 +44,7 @@ usage_value() {
   percent=$(python3 "$fetch_script" --window "$window" 2>/dev/null) || return 0
   reset=$(python3 "$fetch_script" --window "$window" --field reset_in 2>/dev/null) || reset=0
   printf '#[bg=colour238,fg=%s]%s%%#[bg=colour238,fg=colour255] %s' \
-    "$(percentage_color "$percent")" "$percent" "$(format_reset "$reset")"
+    "$(remaining_color "$percent")" "$percent" "$(format_reset "$reset")"
 }
 
 printf '#[bg=colour238,fg=colour238] #[bg=colour238,fg=colour255,bold]5h #[bg=colour238,fg=colour255]%s#[bg=colour238,fg=colour255] | #[bg=colour238,fg=colour255,bold]wk #[bg=colour238,fg=colour255]%s#[bg=colour238] #[default]' \
