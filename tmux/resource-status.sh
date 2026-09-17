@@ -72,43 +72,23 @@ if [[ -z "$usage" ]]; then
 fi
 
 IFS=$'\t' read -r cpu cpu_command memory memory_command <<< "$usage"
-label_max=${TMUX_RESOURCE_STATUS_LABEL_MAX:-16}
-[[ "$label_max" =~ ^[1-9][0-9]*$ ]] || label_max=16
-shorten_label() {
-  local label="$1"
-  if (( ${#label} > label_max )); then
-    printf '%s…' "${label:0:label_max-1}"
-  else
-    printf '%s' "$label"
-  fi
-}
-cpu_command=$(shorten_label "$cpu_command")
-memory_command=$(shorten_label "$memory_command")
-severity_color() {
+gradient_color() {
   local value="$1"
-  if (( value >= 80 )); then
+  if (( value >= 90 )); then
     printf 'colour196'
-  elif (( value >= 50 )); then
-    printf 'colour226'
+  elif (( value >= 75 )); then
+    printf 'colour203'
+  elif (( value >= 60 )); then
+    printf 'colour215'
+  elif (( value >= 40 )); then
+    printf 'colour186'
+  elif (( value >= 20 )); then
+    printf 'colour150'
   else
-    printf '%s' "$2"
+    printf 'colour114'
   fi
 }
-cpu_color=$(severity_color "$cpu" colour81)
-memory_color=$(severity_color "$memory" colour213)
-meter() {
-  local value="$1" filled output='' i
-  filled=$(( (value + 19) / 20 ))
-  (( filled > 5 )) && filled=5
-  for (( i = 0; i < 5; i++ )); do
-    if (( i < filled )); then output+='█'; else output+='░'; fi
-  done
-  printf '%s' "$output"
-}
-cpu_extra=''
-memory_extra=''
-(( cpu >= 50 )) && cpu_extra=" $cpu_command"
-(( memory >= 50 )) && memory_extra=" $memory_command"
-printf '#[fg=%s]CPU %s%% %s%s#[default] #[fg=%s]MEM %s%% %s%s#[default] ' \
-  "$cpu_color" "$cpu" "$(meter "$cpu")" "$cpu_extra" \
-  "$memory_color" "$memory" "$(meter "$memory")" "$memory_extra"
+cpu_color=$(gradient_color "$cpu")
+memory_color=$(gradient_color "$memory")
+printf '#[bg=colour238,fg=colour255]CPU #[fg=%s]%2d%%#[fg=colour255] | MEM #[fg=%s]%2d%%#[default] ' \
+  "$cpu_color" "$cpu" "$memory_color" "$memory"
