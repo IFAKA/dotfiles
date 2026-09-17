@@ -28,10 +28,10 @@ nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp
 
 usage() {
   cat <<'EOF'
-  dotfiles — independent zsh, tmux, Neovim, mpv, and course launcher configuration
+  dotfiles — independent zsh, tmux, btop, Neovim, mpv, and course launcher configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [zsh|tmux|nvim|mpv|course] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course] [--yes] [--dry-run]
 
 Actions:
   install       Install all configured components (default)
@@ -70,13 +70,15 @@ install_packages() {
   if selected tmux; then
     command -v tmux >/dev/null 2>&1 || packages+=(tmux)
     command -v lazygit >/dev/null 2>&1 || packages+=(lazygit)
-    command -v btop >/dev/null 2>&1 || packages+=(btop)
     command -v git >/dev/null 2>&1 || packages+=(git)
     if [[ "$os" == Darwin ]]; then
       command -v python >/dev/null 2>&1 || packages+=(python)
     else
       command -v python >/dev/null 2>&1 || packages+=(python3)
     fi
+  fi
+  if selected tmux || selected btop; then
+    command -v btop >/dev/null 2>&1 || packages+=(btop)
   fi
   if selected nvim; then
     command -v nvim >/dev/null 2>&1 || packages+=(neovim)
@@ -265,18 +267,41 @@ install_tmux() {
   for file in "${tmux_files[@]}"; do
     copy_file "$repo_dir/tmux/$file" "$dest/$file" "$backup/$file"
   done
-  mkdir -p "$config_root/btop"
-  for file in "${btop_files[@]}"; do
-    copy_file "$repo_dir/btop/$file" "$config_root/btop/$file" "$config_root/btop/$file.backup.$(date +%s)"
-  done
   printf 'dotfiles manages tmux.conf.\n' > "$tmux_marker"
   echo "  tmux installed (backup: $backup)"
+}
+
+install_btop() {
+  (selected tmux || selected btop) || return 0
+  [[ -f "$repo_dir/btop/btop.conf" ]] || die "Invalid btop component in checkout"
+  local backup="$config_root/btop.backup.$(date +%s)"
+  if [[ "$dry_run" == true ]]; then echo "  Would install btop into $config_root/btop"; return; fi
+  mkdir -p "$config_root/btop"
+  for file in "${btop_files[@]}"; do
+    copy_file "$repo_dir/btop/$file" "$config_root/btop/$file" "$backup/$file"
+  done
+  printf 'dotfiles manages btop.conf.\n' > "$config_root/btop/.dotfiles-btop-managed"
+  echo "  btop installed (backup: $backup)"
 }
 
 uninstall_component() {
   local kind="$1" dest backup file found=false
   if [[ "$kind" == nvim ]]; then dest="$config_root/nvim"; backup="$config_root/nvim.uninstall-backup.$(date +%s)"; [[ -f "$nvim_marker" ]] || { echo "  Neovim is not managed; nothing removed."; return; }; fi
   if [[ "$kind" == tmux ]]; then dest="$config_root/tmux"; backup="$config_root/tmux.uninstall-backup.$(date +%s)"; [[ -f "$tmux_marker" ]] || { echo "  tmux is not managed; nothing removed."; return; }; fi
+  if [[ "$kind" == btop ]]; then
+    local btop_marker="$config_root/btop/.dotfiles-btop-managed"
+    [[ -f "$btop_marker" ]] || { echo "  btop is not managed; nothing removed."; return; }
+    confirm "Remove managed btop configuration?" || return
+    if [[ "$dry_run" == true ]]; then echo "  Would remove managed btop configuration from $config_root/btop"; return; fi
+    local btop_backup="$config_root/btop.uninstall-backup.$(date +%s)"
+    for file in "${btop_files[@]}"; do
+      if [[ -f "$config_root/btop/$file" ]]; then mkdir -p "$btop_backup"; cp -p "$config_root/btop/$file" "$btop_backup/$file"; rm -f "$config_root/btop/$file"; fi
+    done
+    rm -f "$btop_marker"
+    rmdir "$config_root/btop" 2>/dev/null || true
+    echo "  Removed btop configuration (backup: $btop_backup)"
+    return
+  fi
   if [[ "$kind" == zsh ]]; then
     [[ -f "$zsh_marker" ]] || { echo "  zsh is not managed; nothing removed."; return; }
     confirm "Remove managed zsh configuration?" || return
@@ -329,6 +354,7 @@ uninstall_component() {
         found=true
       fi
     done
+    rm -f "$config_root/btop/.dotfiles-btop-managed"
     rmdir "$config_root/btop" 2>/dev/null || true
   fi
   [[ "$found" == true ]] && echo "  Removed managed $kind files (backup: $backup)"
@@ -346,7 +372,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      zsh|tmux|nvim|mpv|course) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      zsh|tmux|btop|nvim|mpv|course) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -361,11 +387,12 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected mpv && uninstall_component mpv; selected course && uninstall_component course; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; exit 0; fi
 install_packages "$os"
 install_zsh
 check_nvim
 install_tmux
+install_btop
 install_tmux_plugins
 install_nvim
 install_language_servers

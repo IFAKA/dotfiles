@@ -25,7 +25,7 @@ bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 help=$("$repo_root/install" --help)
-grep -q 'zsh|tmux|nvim|mpv|course' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
@@ -33,6 +33,14 @@ dry_run=$(PATH="$test_home/minimal-bin:/usr/bin:/bin" DOTFILES_SKIP_PACKAGES=fal
 grep -q 'lazygit' <<<"$dry_run" || fail "tmux dry-run does not provision lazygit"
 grep -q 'btop' <<<"$dry_run" || fail "tmux dry-run does not provision btop"
 grep -q 'Would install tmux plugins' <<<"$dry_run" || fail "tmux dry-run does not provision plugins"
+btop_dry_run=$(PATH="$test_home/minimal-bin:/usr/bin:/bin" DOTFILES_SKIP_PACKAGES=false "$repo_root/install" install btop --dry-run 2>&1)
+grep -q 'btop' <<<"$btop_dry_run" || fail "btop dry-run does not provision btop"
+! grep -q 'lazygit' <<<"$btop_dry_run" || fail "btop install unexpectedly provisions lazygit"
+
+"$repo_root/install" install btop --yes
+assert_file "$XDG_CONFIG_HOME/btop/btop.conf"
+"$repo_root/install" uninstall btop --yes
+[[ ! -e "$XDG_CONFIG_HOME/btop/btop.conf" ]] || fail "btop uninstall failed"
 
 "$repo_root/install" install tmux --yes
 

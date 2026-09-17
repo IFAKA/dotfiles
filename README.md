@@ -1,6 +1,6 @@
 # dotfiles
 
-Small, independent zsh, tmux, Neovim, and mpv configuration for macOS and Linux.
+Small, independent zsh, tmux, btop, Neovim, and mpv configuration for macOS and Linux.
 
 Install the dotfiles components on a new machine:
 
@@ -14,12 +14,13 @@ Each user has their own checkout, configuration, backups, and package state.
 
 ```bash
 dotfiles install tmux
+dotfiles install btop
 dotfiles install zsh
 dotfiles install nvim
 dotfiles install
 dotfiles install mpv
-dotfiles update [tmux|nvim|mpv]
-dotfiles uninstall [tmux|nvim|mpv]
+dotfiles update [tmux|btop|nvim|mpv]
+dotfiles uninstall [tmux|btop|nvim|mpv]
 dotfiles --dry-run
 ```
 
