@@ -244,7 +244,7 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM'
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'bg=colour238,fg=colour186] CPU' <<<"$resource_status_raw" || fail "CPU usage color missing"
 grep -q 'fg=colour114]MEM' <<<"$resource_status_raw" || fail "memory usage color missing"
