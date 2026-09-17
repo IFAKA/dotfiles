@@ -23,6 +23,8 @@ class Target:
     row: int
     column: int
     action: str
+    end_row: int = 0
+    end_column: int = 0
 
 
 URL = re.compile(r"(?<![\w@])(?:https?://|ftp://|www\.)[^\s<>\"']+")
@@ -48,8 +50,20 @@ def display_column(line: str, index: int) -> int:
     return cell_width(line[:index])
 
 
+def target_contains(target: Target, row: int, column: int) -> bool:
+    end_row = target.end_row if target.end_row else target.row
+    end_column = target.end_column if target.end_column else target.column + cell_width(target.text) - 1
+    if row < target.row or row > end_row:
+        return False
+    if row == target.row and column < target.column:
+        return False
+    if row == end_row and column > end_column:
+        return False
+    return True
+
+
 def overlaps(target: Target, row: int, column: int, length: int) -> bool:
-    return target.row == row and column < target.column + cell_width(target.text) and column + length > target.column
+    return target_contains(target, row, column) or target_contains(target, row, column + length - 1)
 
 
 def detect(text: str) -> list[Target]:
@@ -57,7 +71,8 @@ def detect(text: str) -> list[Target]:
     result: list[Target] = []
     seen: set[str] = set()
 
-    def add(kind: str, value: str, row: int, column: int, action: str = "copy") -> None:
+    def add(kind: str, value: str, row: int, column: int, action: str = "copy",
+            end_row: int | None = None, end_column: int | None = None) -> None:
         value = clean(value) if kind not in {"code", "json", "codex-response"} else value
         if kind == "ip":
             address = value.rsplit(":", 1)[0] if re.fullmatch(r"(?:\d{1,3}\.){3}\d{1,3}:\d{1,5}", value) else value
@@ -66,7 +81,11 @@ def detect(text: str) -> list[Target]:
         if not value or value in seen:
             return
         seen.add(value)
-        result.append(Target(kind, value, value, row, column, action))
+        if end_row is None:
+            end_row = row
+        if end_column is None:
+            end_column = column + cell_width(value) - 1 if end_row == row else 0
+        result.append(Target(kind, value, value, row, column, action, end_row, end_column))
 
     for row, line in enumerate(lines):
         for match in URL.finditer(line):
@@ -97,7 +116,10 @@ def detect(text: str) -> list[Target]:
             end = next((i for i in range(index + 1, len(lines)) if re.match(r"^\s*```\s*$", lines[i])), None)
             if end is not None and end > index + 1:
                 kind = "json" if fence.group(1) and fence.group(1).lower() == "json" else "code"
-                add(kind, "\n".join(lines[index + 1:end]), index, 0)
+                first_row = index + 1
+                last_row = end - 1
+                add(kind, "\n".join(lines[first_row:end]), first_row, 0,
+                    end_row=last_row, end_column=cell_width(lines[last_row]) - 1)
                 index = end
         index += 1
 
@@ -192,7 +214,7 @@ def copy_value(value: str) -> None:
 
 
 def smart_action(text: str, row: int, column: int, pane_id: str | None) -> int:
-    candidates = [target for target in detect(text) if target.row == row and target.column <= column < target.column + len(target.text)]
+    candidates = [target for target in detect(text) if target_contains(target, row, column)]
     if not candidates:
         return 0
     target = candidates[0]

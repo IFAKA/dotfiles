@@ -60,6 +60,10 @@ assert module.parse_location("src/main.py:42:8") == ("src/main.py", 42, 8)
 assert module.open_command(next(target for target in targets if target.type == "url"))[1] == "https://example.com/docs"
 os.environ["EDITOR"] = "nvim"
 assert any("+call cursor(42,8)" in part for part in module.edit_command(location, None))
+command = next(target for target in targets if target.type == "command")
+code = next(target for target in targets if target.type == "code")
+assert module.target_contains(command, command.row, command.column + len(command.text) - 1)
+assert module.target_contains(code, 8, 3)
 assert module.smart_action(sample, 99, 99, None) == 0
 PY
 python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart copy adversarial cases"
