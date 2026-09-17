@@ -29,8 +29,8 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows compact, color-graded `CPU | MEM` labels immediately before Git
-information on the right side of the status bar. Each label changes color based
+tmux shows Git and Codex usage information followed by compact, color-graded
+`CPU | MEM` labels at the rightmost edge of the status bar. Each label changes color based
 on its current usage; the full process list and process names are available in the btop
 popup. Git information is for the
 active pane's working directory: it displays the branch (or detached commit)
@@ -65,10 +65,10 @@ labels; this keeps simultaneous Codex conversations in the same repository
 independent. If no pane title is available, it falls back to the active
 working directory in Codex's local session database. Unknown applications use
 their executable name. Codex windows also show a compact pane-state icon: `✦`
-while idle, a one-character-at-a-time Braille marquee while active, `⚠` when
-confirmation appears to be required, and `✓` when ready for the next prompt in
-a background window. The completion check disappears while you are viewing
-that window.
+while idle and caught up, a one-character-at-a-time Braille marquee while
+active, `⚠` when confirmation appears to be required, and `✓` when ready for
+the next prompt in a background window. The completion check disappears while
+you are viewing that window.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.

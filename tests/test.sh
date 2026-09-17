@@ -244,10 +244,11 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM'
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' ● CPU | ● MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
-grep -q 'bg=colour238,fg=colour186] CPU' <<<"$resource_status_raw" || fail "CPU usage color missing"
-grep -q 'fg=colour114]MEM' <<<"$resource_status_raw" || fail "memory usage color missing"
+grep -q 'bg=colour235,fg=colour255,bold] ' <<<"$resource_status_raw" || fail "CPU leading space missing"
+grep -q 'fg=colour186,bg=colour235,bold]●.* CPU' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
+grep -q 'fg=colour114,bg=colour235,bold]●.* MEM.*bg=colour235,fg=colour255,bold].*#\[default\]$' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
@@ -258,9 +259,10 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
 grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
 status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")
-resource_position=${status_right%%resource-status.sh*}
 git_position=${status_right%%git-status.sh*}
-[[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && ${#resource_position} -lt ${#git_position} ]] || fail "resource status is not before git status"
+resource_position=${status_right%%resource-status.sh*}
+codex_position=${status_right%%codex-usage.sh*}
+[[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && "$codex_position" != "$status_right" && ${#git_position} -lt ${#codex_position} && ${#codex_position} -lt ${#resource_position} ]] || fail "resource status is not rightmost"
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
