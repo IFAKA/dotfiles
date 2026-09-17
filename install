@@ -20,7 +20,7 @@ tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh)
+tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-copy.py)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 

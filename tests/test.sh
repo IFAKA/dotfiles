@@ -26,6 +26,71 @@ bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
+python3 -m py_compile "$repo_root/tmux/smart-copy.py" || fail "smart copy detector syntax"
+python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart copy detector matrix"
+import importlib.util
+import os
+import sys
+
+spec = importlib.util.spec_from_file_location("smart_copy", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+sample = """URL https://example.com/docs.
+Location src/main.py:42:8
+Path ./README.md
+Git 3f2a1bc branch feature/smart-copy PR #123
+$ git status --short
+ERROR src/server.ts:88:14: refused
+IP 192.168.1.25 at 12:30:45
+```python
+print('ok')
+```
+{"enabled":true}
+assistant: finished successfully
+"""
+targets = module.detect(sample)
+types = {target.type for target in targets}
+expected = {"url", "location", "path", "git-hash", "git-ref", "command", "error", "ip", "timestamp", "code", "json", "codex-response"}
+assert expected <= types, (expected - types, targets)
+location = next(target for target in targets if target.value == "src/main.py:42:8")
+assert (location.row, location.column) == (1, 9), location
+assert module.parse_location("src/main.py:42:8") == ("src/main.py", 42, 8)
+assert module.open_command(next(target for target in targets if target.type == "url"))[1] == "https://example.com/docs"
+os.environ["EDITOR"] = "nvim"
+assert any("+call cursor(42,8)" in part for part in module.edit_command(location, None))
+assert module.smart_action(sample, 99, 99, None) == 0
+PY
+python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart copy adversarial cases"
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("smart_copy_stress", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+text = """punctuation (https://example.com/a?q=1), https://example.com/a?q=1.
+bad location file.py:nope and bad IP 999.1.1.1
+good IP 10.0.0.1:8080; duplicate 10.0.0.1:8080
+› new prompt must stop the response
+assistant: first response
+line one
+› Ask Codex to do anything
+assistant: latest response
+line two
+"""
+targets = module.detect(text)
+values = [target.value for target in targets]
+assert values.count("https://example.com/a?q=1") == 1, values
+assert "999.1.1.1" not in values, values
+assert "10.0.0.1:8080" in values, values
+response = next(target for target in targets if target.type == "codex-response")
+assert response.value == "latest response\nline two", response.value
+assert module.detect("") == []
+assert module.detect("😀 https://example.com/😀!")[0].column == 3
+PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
 
@@ -126,6 +191,7 @@ assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/smart-copy.py"
 assert_file "$XDG_CONFIG_HOME/tmux/resource-monitor.sh"
 assert_file "$XDG_CONFIG_HOME/btop/btop.conf"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
@@ -139,6 +205,7 @@ grep -q "^bind -T copy-mode-vi Space run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf
 grep -q "^bind -T copy-mode-vi v send-keys -X begin-selection$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "character selection binding missing"
 grep -q "^bind -T copy-mode-vi V send-keys -X select-line$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "line selection binding missing"
 grep -Fq "bind v copy-mode \\; run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix v EasyMotion binding missing"
+grep -Fq "bind a copy-mode \\; run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix a EasyMotion alias missing"
 grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux-easy-motion plugin missing"
 grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"
 grep -q '^set -g @easy-motion-auto-begin-selection "true"$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion auto-selection missing"
@@ -289,7 +356,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-copy.py" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

@@ -57,6 +57,16 @@ resource monitor in the same style of popup. Its `j/k` process navigation and
 `h/l` panel navigation match Vim; `Shift-K` kills the selected process. Reload
 an active tmux server with `C-Space` then `r`.
 
+Press `C-Space` then `v`, or `C-Space` then `a`, for the normal EasyMotion copy-mode
+overlay. `C-Space` then `[` followed by `Space` reaches the same wrapper from
+copy mode. All three entry paths use identical behavior. Lowercase
+labels behave exactly as EasyMotion always has. If the final label character is
+uppercase, the selection completes and copy mode exits; the selected URL is opened,
+a file or `path:line:column` location is opened in a new tmux Neovim window, and
+other useful terminal values (commands, errors, Git references, JSON/code blocks,
+timestamps, IPs, or the latest Codex response) are copied. There is no Smart Copy
+popup or separate menu. The detector is local and deterministic.
+
 tmux also names windows from the application running in the active pane. For a
 Codex pane, the managed helper uses that pane's Codex title and displays the
 conversation name, such as
