@@ -233,7 +233,7 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
 fi
 EOF
 chmod +x "$fake_bin/ps"
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU 42% | MEM 18% '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU 42% | MEM 18%'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
