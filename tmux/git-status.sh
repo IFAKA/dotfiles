@@ -44,22 +44,22 @@ if (( staged + unstaged + untracked + conflicts == 0 )); then
 else
   (( conflicts > 0 )) && {
     status_kinds+=(conflict)
-    status_labels+=(conflict)
+    status_labels+=('!')
     status_counts+=("$conflicts")
   }
   (( staged > 0 )) && {
     status_kinds+=(staged)
-    status_labels+=(staged)
+    status_labels+=('+')
     status_counts+=("$staged")
   }
   (( unstaged > 0 )) && {
     status_kinds+=(modified)
-    status_labels+=(modified)
+    status_labels+=('~')
     status_counts+=("$unstaged")
   }
   (( untracked > 0 )) && {
     status_kinds+=(untracked)
-    status_labels+=(untracked)
+    status_labels+=('?')
     status_counts+=("$untracked")
   }
 fi
@@ -69,12 +69,12 @@ if git -C "$directory" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; the
   read -r ahead behind <<< "$divergence"
   (( ahead > 0 )) && {
     status_kinds+=(ahead)
-    status_labels+=(ahead)
+    status_labels+=('↑')
     status_counts+=("$ahead")
   }
   (( behind > 0 )) && {
     status_kinds+=(behind)
-    status_labels+=(behind)
+    status_labels+=('↓')
     status_counts+=("$behind")
   }
 fi
@@ -82,7 +82,7 @@ fi
 stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
 (( stash_count > 0 )) && {
   status_kinds+=(stash)
-  status_labels+=(stash)
+  status_labels+=('⚑')
   status_counts+=("$stash_count")
 }
 

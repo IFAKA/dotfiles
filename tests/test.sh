@@ -171,19 +171,19 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$(git_status_output "$git_repo")" 'main '
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$(git_status_output "$git_repo")" 'modified 1 main '
+assert_output "$(git_status_output "$git_repo")" '~ 1 main '
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(git_status_output "$git_repo")" 'untracked 3 modified 1 staged 1 main '
+assert_output "$(git_status_output "$git_repo")" '? 3 ~ 1 + 1 main '
 git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
 [[ "$git_status_raw" != *'tracked.txt'* ]] || fail "changed filenames are still rendered"
-grep -q 'fg=colour255,bg=colour22.*staged 1' <<<"$git_status_raw" || fail "staged status color missing"
-grep -q 'bg=colour136.*modified 1' <<<"$git_status_raw" || fail "modified status color missing"
-grep -q 'fg=colour255,bg=colour238.*untracked 3' <<<"$git_status_raw" || fail "untracked status color missing"
+grep -q 'fg=colour255,bg=colour22.*+ 1' <<<"$git_status_raw" || fail "staged status color missing"
+grep -q 'bg=colour136.*~ 1' <<<"$git_status_raw" || fail "modified status color missing"
+grep -q 'fg=colour255,bg=colour238.*? 3' <<<"$git_status_raw" || fail "untracked status color missing"
 
 conflict_repo=$(mktemp -d "$test_home/conflict-repo.XXXXXX")
 git -C "$conflict_repo" init -q
@@ -201,12 +201,12 @@ printf '%s' main > "$conflict_repo/conflict.txt"
 git -C "$conflict_repo" commit -qam main
 git -C "$conflict_repo" merge side >/dev/null 2>&1 || true
 conflict_status_raw=$("$repo_root/tmux/git-status.sh" "$conflict_repo")
-grep -q 'fg=colour255,bg=colour124,bold] conflict 1' <<<"$conflict_status_raw" || fail "conflict status color missing"
+grep -q 'fg=colour255,bg=colour124,bold] ! 1' <<<"$conflict_status_raw" || fail "conflict status color missing"
 
 git -C "$git_repo" stash push -uqm changed
-assert_output "$(git_status_output "$git_repo")" 'stash 1 main '
+assert_output "$(git_status_output "$git_repo")" '⚑ 1 main '
 git -C "$git_repo" checkout --detach -q
-assert_output "$(git_status_output "$git_repo")" "stash 1 $(git -C "$git_repo" rev-parse --short HEAD) "
+assert_output "$(git_status_output "$git_repo")" "⚑ 1 $(git -C "$git_repo" rev-parse --short HEAD) "
 assert_output "$(git_status_output "$test_home")" ''
 
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
