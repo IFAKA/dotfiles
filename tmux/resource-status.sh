@@ -90,5 +90,5 @@ gradient_color() {
 }
 cpu_color=$(gradient_color "$cpu")
 memory_color=$(gradient_color "$memory")
-printf '#[bg=colour238,fg=colour255] CPU #[fg=%s]%2d%%#[fg=colour255] | MEM #[fg=%s]%2d%%#[default] ' \
+printf '#[bg=colour238,fg=colour255] CPU #[fg=%s]%2d%%#[fg=colour255] | MEM #[fg=%s]%2d%%#[bg=colour238,fg=colour255] #[default]' \
   "$cpu_color" "$cpu" "$memory_color" "$memory"
