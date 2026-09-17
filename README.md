@@ -28,8 +28,10 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows the top CPU and memory-consuming processes immediately before Git
-information on the right side of the status bar. Git information is for the
+tmux shows compact colored CPU and memory meters immediately before Git
+information on the right side of the status bar. At 50% usage or higher, the
+meter also reveals the top process name; the full process list is available in
+the btop popup. Git information is for the
 active pane's working directory: it displays the branch (or detached commit)
 and named, color-coded change counts. Filenames are intentionally omitted so
 the status remains stable and glanceable. The stash count is shown when one

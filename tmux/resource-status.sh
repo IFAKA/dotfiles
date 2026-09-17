@@ -96,5 +96,19 @@ severity_color() {
 }
 cpu_color=$(severity_color "$cpu" colour81)
 memory_color=$(severity_color "$memory" colour213)
-printf '#[fg=%s]CPU %s%% %s#[default] #[fg=%s]MEM %s%% %s#[default] ' \
-  "$cpu_color" "$cpu" "$cpu_command" "$memory_color" "$memory" "$memory_command"
+meter() {
+  local value="$1" filled output='' i
+  filled=$(( (value + 19) / 20 ))
+  (( filled > 5 )) && filled=5
+  for (( i = 0; i < 5; i++ )); do
+    if (( i < filled )); then output+='█'; else output+='░'; fi
+  done
+  printf '%s' "$output"
+}
+cpu_extra=''
+memory_extra=''
+(( cpu >= 50 )) && cpu_extra=" $cpu_command"
+(( memory >= 50 )) && memory_extra=" $memory_command"
+printf '#[fg=%s]CPU %s%% %s%s#[default] #[fg=%s]MEM %s%% %s%s#[default] ' \
+  "$cpu_color" "$cpu" "$(meter "$cpu")" "$cpu_extra" \
+  "$memory_color" "$memory" "$(meter "$memory")" "$memory_extra"
