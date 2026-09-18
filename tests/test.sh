@@ -49,11 +49,14 @@ print('ok')
 ```
 {"enabled":true}
 assistant: finished successfully
+$ codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b
 """
 targets = module.detect(sample)
 types = {target.type for target in targets}
-expected = {"url", "location", "path", "git-hash", "git-ref", "command", "error", "ip", "timestamp", "code", "json", "codex-response"}
+expected = {"url", "location", "path", "git-hash", "git-ref", "command", "codex-resume", "error", "ip", "timestamp", "code", "json", "codex-response"}
 assert expected <= types, (expected - types, targets)
+resume = next(target for target in targets if target.type == "codex-resume")
+assert resume.value == "codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b", resume
 location = next(target for target in targets if target.value == "src/main.py:42:8")
 assert (location.row, location.column) == (1, 9), location
 assert module.parse_location("src/main.py:42:8") == ("src/main.py", 42, 8)
@@ -92,6 +95,7 @@ assert "999.1.1.1" not in values, values
 assert "10.0.0.1:8080" in values, values
 response = next(target for target in targets if target.type == "codex-response")
 assert response.value == "latest response\nline two", response.value
+assert not any(target.type == "codex-resume" for target in module.detect("$ codex resume not-a-uuid"))
 assert module.detect("") == []
 assert module.detect("😀 https://example.com/😀!")[0].column == 3
 PY
