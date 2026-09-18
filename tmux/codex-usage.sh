@@ -5,40 +5,12 @@ plugin_root="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/tmux/
 fetch_script="$plugin_root/agent-usage-tmux/scripts/fetch_codex_usage.py"
 
 mode=${1:-}
-if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
-  pane_pid=$mode
-  [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
-fi
-window_id=${2:-default}
-[[ "$window_id" =~ ^@[0-9]+$ ]] && window_id=${window_id#@} || window_id=default
-
-process_command() {
-  ps -o command= -p "$1" 2>/dev/null | sed 's/^ *//'
-}
-
-has_codex_process() {
-  local pid="$1" child command
-  command=$(process_command "$pid")
-  [[ "$command" == *[Cc]odex* ]] && return 0
-  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
-    has_codex_process "$child" && return 0
-  done
-  return 1
-}
-
 [[ -f "$fetch_script" ]] || exit 0
 
-if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
-  has_codex_process "$pane_pid" || exit 0
-fi
-
 cache_root="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-usage-${UID}}"
-cache_dir="$cache_root/$window_id"
+cache_dir="$cache_root"
 cache_file="$cache_dir/usage"
-attempt_file="$cache_dir/last-attempt"
 refresh_lock="$cache_dir/.refresh.lock"
-refresh_interval="${TMUX_CODEX_USAGE_REFRESH_INTERVAL:-300}"
-[[ "$refresh_interval" =~ ^[1-9][0-9]*$ ]] || refresh_interval=300
 
 format_reset() {
   local seconds="$1"
@@ -99,18 +71,9 @@ refresh_usage() {
 }
 
 schedule_refresh() {
-  local now last_attempt=0
-  now=$(date +%s)
-  if [[ -f "$attempt_file" ]]; then
-    read -r last_attempt < "$attempt_file" || true
-  fi
-  [[ "$last_attempt" =~ ^[0-9]+$ ]] || last_attempt=0
-  (( now - last_attempt >= refresh_interval )) || return 0
-
   mkdir -p "$cache_dir"
   mkdir "$refresh_lock" 2>/dev/null || return 0
-  printf '%s\n' "$now" > "$attempt_file"
-  nohup bash "$0" --refresh "@$window_id" >/dev/null 2>&1 &
+  nohup bash "$0" --refresh >/dev/null 2>&1 &
 }
 
 if [[ "$mode" == --refresh ]]; then

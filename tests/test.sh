@@ -370,33 +370,37 @@ calls.write_text(str(int(calls.read_text()) + 1))
 print('80' if '--field' not in sys.argv else '80')
 EOF
 chmod +x "$usage_plugin/fetch_codex_usage.py"
-usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_CODEX_USAGE_CACHE_DIR="$usage_cache" TMUX_CODEX_USAGE_REFRESH_INTERVAL=60 CODEX_USAGE_CALLS="$usage_calls" PATH="$fake_bin:$PATH")
+usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_CODEX_USAGE_CACHE_DIR="$usage_cache" CODEX_USAGE_CALLS="$usage_calls" PATH="$fake_bin:$PATH")
 first_usage=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger
 for _ in {1..40}; do
-  [[ -f "$usage_cache/default/usage" ]] && break
+  [[ -f "$usage_cache/usage" ]] && break
   sleep 0.05
 done
-assert_file "$usage_cache/default/usage"
+assert_file "$usage_cache/usage"
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m | wk 80% 1m |'
 assert_output "$(cat "$usage_calls")" '4'
-printf '0 80 86400 80 43200\n' > "$usage_cache/default/usage"
+printf '0 80 86400 80 43200\n' > "$usage_cache/usage"
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1d | wk 80% 12h |'
-printf '0 80 3600 80 0\n' > "$usage_cache/default/usage"
+printf '0 80 3600 80 0\n' > "$usage_cache/usage"
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1h | wk 80% 0m |'
 assert_output "$(cat "$usage_calls")" '4'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
-env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger @2
 for _ in {1..40}; do
-  [[ -f "$usage_cache/2/usage" ]] && break
+  [[ ! -d "$usage_cache/.refresh.lock" ]] && break
   sleep 0.05
 done
-assert_file "$usage_cache/2/usage"
+env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger @2
+for _ in {1..40}; do
+  [[ "$(cat "$usage_calls")" == 8 ]] && break
+  sleep 0.05
+done
+assert_file "$usage_cache/usage"
 assert_output "$(cat "$usage_calls")" '8'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102)" ''
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m | wk 80% 1m |'
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'fg=colour186,bg=colour237,bold]CPU ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"

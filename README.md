@@ -45,12 +45,12 @@ after pulling changes with:
 dotfiles install tmux --yes
 ```
 
-The right side also shows Codex's `5h` and `wk` usage windows when the active
-tmux pane is running Codex and Codex is authenticated locally. Values are cached
-between Codex events and recalculated when a Codex window opens, a response
-finishes, or an action is required; each tmux window keeps its own cached
-values. The usage helper comes from
-`artischocki/agent-usage-tmux` and stays blank when no usage data is available.
+The right side also shows Codex's `5h` and `wk` usage windows. Every tmux
+window reads the same latest cached value. The API is queried only when a Codex
+session opens, an action is required, or a response finishes; status-bar
+renders only read the cache. The usage helper comes from
+`artischocki/agent-usage-tmux`; before the first refresh it shows an empty
+placeholder.
 
 Press `C-Space` then `g` from any tmux pane to open LazyGit in a large popup rooted
 in that pane's current directory. Close LazyGit to return to the underlying

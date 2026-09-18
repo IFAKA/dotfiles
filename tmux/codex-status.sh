@@ -44,7 +44,7 @@ write_state() {
 request_usage_refresh() {
   local usage_script="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/codex-usage.sh"
   [[ -f "$usage_script" ]] || return 0
-  nohup bash "$usage_script" --trigger "$window_id" >/dev/null 2>&1 &
+  nohup bash "$usage_script" --trigger >/dev/null 2>&1 &
 }
 
 print_loading_marquee() {
