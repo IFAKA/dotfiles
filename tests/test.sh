@@ -96,6 +96,8 @@ assert "10.0.0.1:8080" in values, values
 response = next(target for target in targets if target.type == "codex-response")
 assert response.value == "latest response\nline two", response.value
 assert not any(target.type == "codex-resume" for target in module.detect("$ codex resume not-a-uuid"))
+bare_resume = next(target for target in module.detect("codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b") if target.type == "codex-resume")
+assert bare_resume.value == "codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b", bare_resume
 assert module.detect("") == []
 assert module.detect("😀 https://example.com/😀!")[0].column == 3
 PY

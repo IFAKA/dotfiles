@@ -37,7 +37,7 @@ IP = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
 STAMP = re.compile(r"(?<![\w])(?:\d{4}-\d\d-\d\d[T ][0-2]?\d:\d\d(?::\d\d)?(?:Z|[+-]\d\d:?\d\d)?)|(?:[0-2]?\d:\d\d:\d\d)(?![\w])")
 COMMAND = re.compile(r"^[ \t]*(?:[$❯➜>][ \t]+|\w+@[^: ]+:[^$ ]*\$[ \t]+)(.+?)\s*$")
 CODEX_RESUME = re.compile(
-    r"^codex\s+resume\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    r"(?<![\w-])codex\s+resume\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])",
     re.I,
 )
 
@@ -107,11 +107,12 @@ def detect(text: str) -> list[Target]:
                 start = display_column(line, match.start())
                 if not any(overlaps(t, row, start, cell_width(match.group())) for t in result):
                     add(kind, match.group(), row, display_column(line, match.start()), action)
+        for match in CODEX_RESUME.finditer(line):
+            add("codex-resume", match.group(), row, display_column(line, match.start()))
         command = COMMAND.match(line)
         if command and command.group(1).strip():
             command_value = command.group(1).strip()
-            kind = "codex-resume" if CODEX_RESUME.fullmatch(command_value) else "command"
-            add(kind, command_value, row, display_column(line, command.start(1)))
+            add("command", command_value, row, display_column(line, command.start(1)))
         for match in re.finditer(r"\b(?:error|fatal|panic|exception|warning)\b[^\n]*", line, re.I):
             add("error", match.group(), row, display_column(line, match.start()))
 
