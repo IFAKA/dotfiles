@@ -73,7 +73,7 @@ function redact(value) {
 }
 
 function usage() {
-  console.log('Usage: dw-setup.js ROOT [dev|sbx|--migrate]');
+  console.log('Usage: dw-setup.js ROOT [dev|sbx|--migrate|--ready|--toggle]');
 }
 
 function migrate(root) {
@@ -260,10 +260,44 @@ function setup(root, requestedTarget) {
   render();
 }
 
+function ready(root) {
+  const activeFile = path.join(root, 'dw.json');
+  const active = readJson(activeFile);
+  const current = classify(active);
+  const target = current === 'dev' ? 'sbx' : 'dev';
+  const store = projectStore(root);
+  const targetFile = path.join(store, `${target}.json`);
+  process.exitCode = complete(active) && fs.existsSync(targetFile) && complete(readJson(targetFile)) ? 0 : 1;
+}
+
+function toggle(root) {
+  const activeFile = path.join(root, 'dw.json');
+  const active = readJson(activeFile);
+  const current = classify(active);
+  const target = current === 'dev' ? 'sbx' : 'dev';
+  const store = projectStore(root);
+  const currentFile = path.join(store, `${current}.json`);
+  const targetFile = path.join(store, `${target}.json`);
+  if (!complete(active) || !fs.existsSync(targetFile)) {
+    fail('the target DW profile is incomplete; interactive setup is required');
+    return;
+  }
+  const targetProfile = readJson(targetFile);
+  if (!complete(targetProfile)) {
+    fail('the target DW profile is incomplete; interactive setup is required');
+    return;
+  }
+  writeJsonAtomic(currentFile, active);
+  writeJsonAtomic(activeFile, targetProfile);
+  console.log(`Switched to ${target}${target === 'sbx' ? ` ${sandboxNumber(targetProfile.hostname)}` : ''}.`);
+}
+
 const root = process.argv[2];
 const requestedTarget = process.argv[3];
-if (!root || !['dev', 'sbx', '--migrate', undefined].includes(requestedTarget)) {
+if (!root || !['dev', 'sbx', '--migrate', '--ready', '--toggle', undefined].includes(requestedTarget)) {
   usage(); process.exit(2);
 }
 if (requestedTarget === '--migrate') migrate(root);
+else if (requestedTarget === '--ready') ready(root);
+else if (requestedTarget === '--toggle') toggle(root);
 else setup(root, requestedTarget);

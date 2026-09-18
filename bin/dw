@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: dw [profile] [--print] [--migrate] [--path DIRECTORY]
+Usage: dw [profile] [--print] [--migrate] [--ready] [--has-project] [--path DIRECTORY]
 
 Switch the nearest project's active dw.json between its ignored profiles.
 Profiles are named dw.<profile>.json, for example dw.dev.json and dw.sbx.json.
@@ -17,11 +17,15 @@ path=$PWD
 profile=
 print_config=false
 migrate=false
+ready=false
+has_project=false
 while (($#)); do
   case "$1" in
     --path) (($# >= 2)) || die "--path requires a directory"; path=$2; shift 2 ;;
     --print) print_config=true; shift ;;
     --migrate) migrate=true; shift ;;
+    --ready) ready=true; shift ;;
+    --has-project) has_project=true; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; (($# == 1)) || die "expected one profile name"; profile=$1; shift ;;
     -*) die "unknown option '$1'" ;;
@@ -39,8 +43,22 @@ while :; do
   [[ "$current" == / ]] && break
   current=${current%/*}; [[ -n "$current" ]] || current=/
 done
-[[ -n "$root" ]] || die "no DW project found (expected dw.json in this directory or a parent)"
+if [[ -z "$root" ]]; then
+  [[ "$has_project" == true ]] && exit 1
+  die "no DW project found (expected dw.json in this directory or a parent)"
+fi
+
+if [[ "$has_project" == true ]]; then
+  [[ "$migrate" == false && "$print_config" == false && "$ready" == false && -z "$profile" ]] || die "--has-project cannot be combined with another action"
+  exit 0
+fi
+
 command -v node >/dev/null 2>&1 || die "Node.js is required to read DW JSON safely"
+
+if [[ "$ready" == true ]]; then
+  [[ "$migrate" == false && "$print_config" == false && -z "$profile" ]] || die "--ready cannot be combined with another action"
+  exec node "$(dirname "$0")/dw-setup.js" "$root" --ready
+fi
 
 json_value() {
   node - "$1" "$2" <<'NODE'
@@ -95,7 +113,7 @@ if ((${#profiles[@]} == 0)); then
   if [[ -n "$profile" ]]; then
     exec node "$helper" "$root" "$profile"
   else
-    exec node "$helper" "$root"
+    exec node "$helper" "$root" --toggle
   fi
 fi
 
