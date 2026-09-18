@@ -7,6 +7,26 @@ fetch_script="$plugin_root/agent-usage-tmux/scripts/fetch_codex_usage.py"
 mode=${1:-}
 [[ -f "$fetch_script" ]] || exit 0
 
+process_command() {
+  ps -o command= -p "$1" 2>/dev/null | sed 's/^ *//'
+}
+
+has_codex_process() {
+  local pid="$1" child command
+  command=$(process_command "$pid")
+  [[ "$command" == *[Cc]odex* ]] && return 0
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    has_codex_process "$child" && return 0
+  done
+  return 1
+}
+
+if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
+  pane_pid="$mode"
+  [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
+  has_codex_process "$pane_pid" || exit 0
+fi
+
 cache_root="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-usage-${UID}}"
 cache_dir="$cache_root"
 cache_file="$cache_dir/usage"

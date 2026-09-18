@@ -25,6 +25,36 @@ bash -n "$repo_root/tmux/dw-status.sh" || fail "DW status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
+codex_usage_plugin="$test_home/codex-usage-plugin"
+mkdir -p "$codex_usage_plugin/agent-usage-tmux/scripts"
+cat > "$codex_usage_plugin/agent-usage-tmux/scripts/fetch_codex_usage.py" <<'PY'
+#!/usr/bin/env python3
+import sys
+
+if '--field' in sys.argv:
+    print('3600')
+else:
+    print('75')
+PY
+fake_process_bin="$test_home/fake-process-bin"
+mkdir -p "$fake_process_bin"
+cat > "$fake_process_bin/ps" <<'SH'
+#!/usr/bin/env bash
+case "${@: -1}" in
+  4242) printf 'zsh\n' ;;
+  4343) printf 'codex --resume abc\n' ;;
+  *) exit 1 ;;
+esac
+SH
+cat > "$fake_process_bin/pgrep" <<'SH'
+#!/usr/bin/env bash
+exit 1
+SH
+chmod +x "$fake_process_bin/ps" "$fake_process_bin/pgrep"
+ordinary_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/codex-usage.sh" 4242 '@1')
+[[ -z "$ordinary_usage" ]] || fail "Codex usage appeared in an ordinary shell window"
+codex_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/codex-usage.sh" 4343 '@2')
+grep -q '5h' <<<"$codex_usage" || fail "Codex usage disappeared from a Codex window"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 grep -q 'vim.opt.title = true' "$repo_root/nvim/lua/options.lua" || fail "Neovim terminal titles are disabled"
@@ -458,7 +488,7 @@ assert_file "$usage_cache/usage"
 assert_output "$(cat "$usage_calls")" '8'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m | wk 80% 1m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ''
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -Fq 'fg=colour186,bg=colour237,bold]CPU#[fg=colour255,bg=colour237,bold] ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"

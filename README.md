@@ -85,10 +85,11 @@ authentication fails.
 Press `C-Space` then `e` to toggle the active pane's project and show the
 selected environment. `C-Space` then `d` remains tmux detach.
 
-The right side also shows Codex's `5h` and `wk` usage windows. Every tmux
-window reads the same latest cached value. The API is queried only when a Codex
-session opens, an action is required, or a response finishes; status-bar
-renders only read the cache. The usage helper comes from
+The right side shows Codex's `5h` and `wk` usage windows only while the active
+tmux pane belongs to a Codex window. Codex windows read the same latest cached
+value. The API is queried only when a Codex session opens, an action is
+required, or a response finishes; status-bar renders only read the cache. The
+usage helper comes from
 `artischocki/agent-usage-tmux`; before the first refresh it shows an empty
 placeholder.
 
