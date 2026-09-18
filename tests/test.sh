@@ -28,6 +28,7 @@ grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
 grep -q '^bind e run-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
+! grep -q 'display-message.*DW environment' "$repo_root/tmux/tmux.conf" || fail "DW toggle still shows a toast"
 dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
 [[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
 mkdir -p "$test_home/dw-project/nested"
