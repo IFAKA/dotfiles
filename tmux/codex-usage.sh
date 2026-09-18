@@ -4,6 +4,24 @@ set -euo pipefail
 plugin_root="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/tmux/plugins}"
 fetch_script="$plugin_root/agent-usage-tmux/scripts/fetch_codex_usage.py"
 
+pane_pid=${1:-}
+[[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
+
+process_command() {
+  ps -o command= -p "$1" 2>/dev/null | sed 's/^ *//'
+}
+
+has_codex_process() {
+  local pid="$1" child command
+  command=$(process_command "$pid")
+  [[ "$command" == *[Cc]odex* ]] && return 0
+  for child in $(pgrep -P "$pid" 2>/dev/null || true); do
+    has_codex_process "$child" && return 0
+  done
+  return 1
+}
+
+has_codex_process "$pane_pid" || exit 0
 [[ -f "$fetch_script" ]] || exit 0
 
 format_reset() {

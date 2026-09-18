@@ -310,11 +310,22 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
     123) echo 'nvim --embed' ;;
     124) echo '/usr/bin/neovim --embed' ;;
     125) echo 'vim' ;;
+    102) echo '/System/Library/WindowServer' ;;
     *) echo 'node /fake/path/codex' ;;
   esac
 fi
 EOF
 chmod +x "$fake_bin/ps"
+usage_plugin="$test_home/tmux-plugins/agent-usage-tmux/scripts"
+mkdir -p "$usage_plugin"
+cat > "$usage_plugin/fetch_codex_usage.py" <<'EOF'
+#!/usr/bin/env python3
+import sys
+print('80' if '--field' not in sys.argv else '80')
+EOF
+chmod +x "$usage_plugin/fetch_codex_usage.py"
+assert_output "$(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" PATH="$fake_bin:$PATH" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m '
+assert_output "$(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" PATH="$fake_bin:$PATH" "$repo_root/tmux/codex-usage.sh" 102)" ''
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' ● CPU | ● MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'bg=colour235,fg=colour255,bold] ' <<<"$resource_status_raw" || fail "CPU leading space missing"
