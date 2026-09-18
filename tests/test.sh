@@ -18,6 +18,7 @@ resource_status_output() {
 }
 
 bash -n "$repo_root"/{bootstrap,install,update,uninstall} "$repo_root/bin/dw" || fail "shell syntax"
+node --check "$repo_root/bin/dw-setup.js" || fail "DW setup helper syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/dw-status.sh" || fail "DW status script syntax"
@@ -27,7 +28,7 @@ bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
-grep -q '^bind e run-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
+grep -q '^bind e display-popup' "$repo_root/tmux/tmux.conf" || fail "DW environment popup binding is missing"
 ! grep -q 'display-message.*DW environment' "$repo_root/tmux/tmux.conf" || fail "DW toggle still shows a toast"
 dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
 [[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
@@ -179,9 +180,11 @@ if "$repo_root/bin/dw" --path "$test_home" >/dev/null 2>&1; then fail "DW launch
 
 "$repo_root/install" install dw --yes
 assert_file "$test_home/.local/bin/dw"
+assert_file "$test_home/.local/bin/dw-setup.js"
 assert_file "$test_home/.local/bin/.dotfiles-dw-managed"
 "$repo_root/install" uninstall dw --yes
 [[ ! -e "$test_home/.local/bin/dw" ]] || fail "DW uninstall failed"
+[[ ! -e "$test_home/.local/bin/dw-setup.js" ]] || fail "DW setup helper uninstall failed"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"

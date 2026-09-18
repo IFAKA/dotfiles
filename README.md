@@ -48,8 +48,9 @@ dotfiles install tmux --yes
 
 ## DW environments
 
-Install the global DW launcher with `dotfiles install dw`. In a project that
-contains the ignored Prophet files `dw.json`, `dw.dev.json`, and `dw.sbx.json`:
+Install the global DW launcher with `dotfiles install dw`. It works with a
+project that has only its ignored Prophet file `dw.json`; legacy projects may
+also keep `dw.dev.json` and `dw.sbx.json`:
 
 ```bash
 dw              # toggle dev ↔ sbx
@@ -57,6 +58,16 @@ dw dev          # select a profile explicitly
 dw sbx
 dw --print      # print active config with passwords redacted
 ```
+
+If the project has only `dw.json`, the first toggle opens a keyboard form and
+stores the Dev/Sandbox profiles outside the repository under
+`~/.config/dotfiles/dw/`. The current `dw.json` is preserved before asking for
+the target environment's missing values. The form focuses the first missing
+field, uses Enter to advance through missing fields, Tab/Shift-Tab to edit any
+field, and accepts pasted passwords. Pasting the only missing password submits
+immediately; in a Sandbox setup it advances to the next missing field and
+submits when that field completes the form. Cancelling leaves `dw.json`
+unchanged.
 
 The tmux status bar shows the code version and compact environment label (for
 example `version_test 018`). It starts neutral, checks the configured remote

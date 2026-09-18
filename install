@@ -181,10 +181,13 @@ install_course() {
 install_dw() {
   selected dw || return 0
   [[ -f "$repo_dir/bin/dw" ]] || die "Invalid dw component in checkout"
+  [[ -f "$repo_dir/bin/dw-setup.js" ]] || die "Invalid dw setup helper in checkout"
   local backup="$HOME/.local/bin/dw.backup.$(date +%s)"
   if [[ "$dry_run" == true ]]; then echo "  Would install DW launcher into $HOME/.local/bin"; return; fi
   copy_file "$repo_dir/bin/dw" "$HOME/.local/bin/dw" "$backup"
+  copy_file "$repo_dir/bin/dw-setup.js" "$HOME/.local/bin/dw-setup.js" "$backup.setup.js"
   chmod +x "$HOME/.local/bin/dw"
+  chmod +x "$HOME/.local/bin/dw-setup.js"
   printf 'dotfiles manages ~/.local/bin/dw.\n' > "$dw_marker"
   echo "  DW launcher installed (backup: $backup)"
 }
@@ -365,9 +368,10 @@ uninstall_component() {
   if [[ "$kind" == dw ]]; then
     [[ -f "$dw_marker" ]] || { echo "  dw is not managed; nothing removed."; return; }
     confirm "Remove managed DW launcher?" || return
-    local dw_file="$HOME/.local/bin/dw" dw_backup="$HOME/.local/bin/dw.uninstall-backup.$(date +%s)"
+    local dw_file="$HOME/.local/bin/dw" setup_file="$HOME/.local/bin/dw-setup.js" dw_backup="$HOME/.local/bin/dw.uninstall-backup.$(date +%s)"
     if [[ "$dry_run" == true ]]; then echo "  Would remove $dw_file"; return; fi
     if [[ -f "$dw_file" ]]; then cp -p "$dw_file" "$dw_backup"; rm -f "$dw_file"; fi
+    if [[ -f "$setup_file" ]]; then cp -p "$setup_file" "$dw_backup.setup.js"; rm -f "$setup_file"; fi
     rm -f "$dw_marker"
     echo "  Removed DW launcher (backup: $dw_backup)"
     return

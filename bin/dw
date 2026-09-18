@@ -81,7 +81,15 @@ for file in "$root"/dw.*.json; do
   name=${file##*/}; name=${name#dw.}; name=${name%.json}
   [[ -n "$name" ]] && profiles["$name"]=$file
 done
-((${#profiles[@]} > 0)) || die "no DW profiles found (expected files such as dw.dev.json or dw.sbx.json)"
+if ((${#profiles[@]} == 0)); then
+  helper="$(dirname "$0")/dw-setup.js"
+  [[ -f "$helper" ]] || die "no DW profiles found and setup helper is missing"
+  if [[ -n "$profile" ]]; then
+    exec node "$helper" "$root" "$profile"
+  else
+    exec node "$helper" "$root"
+  fi
+fi
 
 if [[ -z "$profile" ]]; then
   [[ -n "${profiles[dev]:-}" && -n "${profiles[sbx]:-}" ]] || \
