@@ -101,6 +101,31 @@ assert bare_resume.value == "codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b",
 assert module.detect("") == []
 assert module.detect("😀 https://example.com/😀!")[0].column == 3
 PY
+python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart action side effects"
+import importlib.util
+import sys
+from types import SimpleNamespace
+
+spec = importlib.util.spec_from_file_location("smart_copy_actions", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+module.shutil.which = lambda name: None
+ran = []
+copied = []
+module.subprocess.run = lambda command, **kwargs: ran.append(command) or SimpleNamespace(returncode=1)
+module.copy_value = copied.append
+
+assert module.smart_action("https://example.com", 0, 8, None) == 0
+assert ran == [["open", "https://example.com"]], ran
+assert copied == [], copied
+
+ran.clear()
+assert module.smart_action("10.0.0.1", 0, 4, None) == 0
+assert ran == [], ran
+assert copied == ["10.0.0.1"], copied
+PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
 

@@ -230,15 +230,11 @@ def smart_action(text: str, row: int, column: int, pane_id: str | None) -> int:
     if target.action == "open":
         command = open_command(target)
         if command:
-            completed = subprocess.run(command, check=False)
-            if completed.returncode:
-                copy_value(target.value)
+            subprocess.run(command, check=False)
     elif target.action == "edit":
         command = edit_command(target, pane_id)
         if command:
-            completed = subprocess.run(command, check=False)
-            if completed.returncode:
-                copy_value(target.value)
+            subprocess.run(command, check=False)
     else:
         copy_value(target.value)
     return 0
