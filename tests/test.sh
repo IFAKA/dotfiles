@@ -354,11 +354,11 @@ assert_output "$(cat "$usage_calls")" '8'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102)" ''
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' ● CPU | ● MEM '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'bg=colour235,fg=colour255,bold] ' <<<"$resource_status_raw" || fail "CPU leading space missing"
-grep -q 'fg=colour186,bg=colour235,bold]●.* CPU' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
-grep -q 'fg=colour114,bg=colour235,bold]●.* MEM.*bg=colour235,fg=colour255,bold].*#\[default\]$' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
+grep -q 'fg=colour186,bg=colour235,bold] CPU' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
+grep -q 'fg=colour114,bg=colour235,bold] MEM.*bg=colour235,fg=colour255,bold].*#\[default\]$' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'

@@ -75,9 +75,9 @@ IFS=$'\t' read -r cpu cpu_command memory memory_command <<< "$usage"
 gradient_color() {
   local value="$1"
   if (( value >= 90 )); then
-    printf 'colour217'
+    printf 'colour196'
   elif (( value >= 75 )); then
-    printf 'colour223'
+    printf 'colour208'
   elif (( value >= 60 )); then
     printf 'colour226'
   elif (( value >= 40 )); then
@@ -90,5 +90,5 @@ gradient_color() {
 }
 cpu_color=$(gradient_color "$cpu")
 memory_color=$(gradient_color "$memory")
-printf '#[bg=colour235,fg=colour255,bold] #[fg=%s,bg=colour235,bold]●#[fg=colour255,bg=colour235,bold] CPU #[fg=colour255]| #[fg=%s,bg=colour235,bold]●#[fg=colour255,bg=colour235,bold] MEM #[bg=colour235,fg=colour255,bold]#[default]' \
+printf '#[bg=colour235,fg=colour255,bold] #[fg=%s,bg=colour235,bold] CPU #[fg=colour255,bg=colour235,bold]| #[fg=%s,bg=colour235,bold] MEM #[bg=colour235,fg=colour255,bold]#[default]' \
   "$cpu_color" "$memory_color"
