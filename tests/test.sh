@@ -211,7 +211,7 @@ line two
 """
 targets = module.detect(text)
 values = [target.value for target in targets]
-assert values.count("https://example.com/a?q=1") == 1, values
+assert values.count("https://example.com/a?q=1") == 2, values
 assert "999.1.1.1" not in values, values
 assert "10.0.0.1:8080" in values, values
 assert "github.com" not in values, values
@@ -248,6 +248,8 @@ assert copied == [], copied
 
 ran.clear()
 assert module.smart_action("10.0.0.1", 0, 4, None) == 0
+assert module.smart_action_target("plain text", 0, 2) is None
+assert module.smart_action_target("https://example.com", 0, 8).type == "url"
 assert ran == [], ran
 assert copied == ["10.0.0.1"], copied
 
@@ -257,6 +259,34 @@ assert next(target for target in targets if target.value == "image.png").action 
 assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
 assert next(target for target in targets if target.value == "notes.txt").action == "edit", targets
 assert next(target for target in module.detect("README.md") if target.value == "README.md").action == "edit"
+PY
+python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart selection matrix"
+import importlib.util
+import sys
+
+spec = importlib.util.spec_from_file_location("smart_selection", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+
+assert module.semantic_select("first second", 0, 0).text == "first"
+assert module.semantic_select("😀 wide", 0, 3).column == 3
+assert module.semantic_select("import os.path", 0, 8, 3).text == "import os.path"
+assert module.semantic_select("a paragraph\ncontinues here\n\nnext", 1, 3, 2).text == "a paragraph\ncontinues here"
+assert module.semantic_select("- one\n- two\n\nend", 1, 2, 2).kind == "list-item"
+assert module.semantic_select("- one\n- two\n\nend", 1, 2, 3).text == "- one\n- two"
+assert module.semantic_select("> quote\n> block", 1, 2, 2).text == "> quote\n> block"
+code = "```python\ndef hello():\n    return 1\n```"
+assert module.semantic_select(code, 1, 5, 2).kind == "function"
+assert module.semantic_select("value = important_name", 0, 18).text == "important_name"
+assert module.detect("$ echo hello")[0].value == "echo hello"
+assert not any(target.type == "command" for target in module.detect("```\n$ echo no\n```"))
+resume = module.detect("$ codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b")
+assert next(target for target in resume if target.type == "codex-resume")
+assert len([target for target in module.detect("https://example.com https://example.com") if target.type == "url"]) == 2
+assert module.semantic_sibling("- one\n- two", 0, 2, 1, 2).text == "two"
+assert module.semantic_sibling("one\n\ntwo\n\nthree", 0, 0, -1, 2) is None
+assert module.semantic_sibling("one\n\ntwo\n\nthree", 2, 0, 1, 2).text == "three"
 PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course|dw' <<<"$help" || fail "help output"
@@ -393,9 +423,13 @@ grep -q '^set -g prefix C-Space$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmu
 grep -q '^unbind C-b$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "legacy tmux prefix was not unbound"
 grep -q "^set -g mode-keys vi$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux vi mode missing"
 grep -q "^bind -T copy-mode-vi Space run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion Space binding missing"
-grep -q "^bind -T copy-mode-vi v send-keys -X begin-selection$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "character selection binding missing"
+grep -q "^bind -T copy-mode-vi Escape run-shell.*smart-select-active.*cancel" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select cancellation binding missing"
+grep -q "^bind -T copy-mode-vi j run-shell.*easy-motion-default.sh.*move-down" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select down binding missing"
+grep -q "^bind -T copy-mode-vi k run-shell.*easy-motion-default.sh.*move-up" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select up binding missing"
+! grep -q "^bind -T copy-mode-vi S " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "standalone S binding must not overlap Smart Select"
+! grep -q "^bind -T copy-mode-vi \(Up\|Down\) " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "arrow bindings must not overlap Smart Select"
 grep -q "^bind -T copy-mode-vi V send-keys -X select-line$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "line selection binding missing"
-grep -Fq "bind v copy-mode \\; run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix v EasyMotion binding missing"
+grep -Fq "bind v copy-mode \\; run-shell -b 'bash \"\${XDG_CONFIG_HOME:-\$HOME/.config}/tmux/easy-motion-default.sh\" smart'" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix v Smart Select binding missing"
 grep -Fq "bind a copy-mode \\; run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix a EasyMotion alias missing"
 grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux-easy-motion plugin missing"
 grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"

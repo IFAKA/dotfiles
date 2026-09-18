@@ -120,6 +120,17 @@ useful terminal values (commands, errors, Git references, JSON/code blocks,
 timestamps, IPs, or the latest Codex response) are copied. There is no Smart Actions
 popup or separate menu. The detector is local and deterministic.
 
+Smart Select shares the `prefix v` EasyMotion entry with Smart Actions, but the
+last label character decides the mode: lowercase selects, uppercase performs
+the Smart Action. Lowercase starts with the complete word under the destination,
+then expands through the token or identifier, line, function or item, paragraph,
+list, quote, and code-block levels. Use `j`/`k` for peer navigation at the
+current level. `y` copies the highlighted native tmux selection, while Escape
+or `q` cancels. If
+code structure is uncertain, selection safely falls back to the containing line
+or block. If an uppercase destination has no detected Smart Action, it falls
+back to Smart Select. Smart Actions retain their immediate copy/open/edit behavior.
+
 tmux names windows from the active pane. For an ordinary shell pane, it derives
 a short name from the current directory only: structural, environment, and
 version-like directory components are ignored, and the shortest meaningful
