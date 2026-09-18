@@ -30,7 +30,7 @@ grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status
 grep -q 'vim.opt.title = true' "$repo_root/nvim/lua/options.lua" || fail "Neovim terminal titles are disabled"
 grep -q 'vim.opt.titlestring' "$repo_root/nvim/lua/options.lua" || fail "Neovim filename title is missing"
 grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
-grep -q '^bind e display-popup' "$repo_root/tmux/tmux.conf" || fail "DW environment popup binding is missing"
+grep -q '^bind e if-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
 ! grep -q 'display-message.*DW environment' "$repo_root/tmux/tmux.conf" || fail "DW toggle still shows a toast"
 dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
 [[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
@@ -508,6 +508,12 @@ grep -q 'user config' "$XDG_CONFIG_HOME/nvim/unrelated.lua" || fail "unrelated c
 
 if command -v nvim >/dev/null 2>&1; then
   nvim --headless -u "$XDG_CONFIG_HOME/nvim/init.lua" -c 'qa!'
+  nvim --headless --clean >/dev/null 2>&1 &
+  nvim_pid=$!
+  nvim_label=$("$repo_root/tmux/program-name.sh" "$nvim_pid" "$test_home" ' init.lua')
+  kill "$nvim_pid" 2>/dev/null || true
+  wait "$nvim_pid" 2>/dev/null || true
+  assert_output "$nvim_label" ' init.lua'
 fi
 
 "$repo_root/install" uninstall tmux --yes

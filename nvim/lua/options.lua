@@ -17,6 +17,8 @@ vim.opt.wrap = false
 vim.opt.linebreak = true
 vim.opt.splitright = true
 vim.opt.splitbelow = true
+vim.opt.title = true
+vim.opt.titlestring = "%{expand('%:t') ==# '' ? '' : ' ' .. expand('%:t')}"
 vim.opt.hlsearch = true
 vim.opt.incsearch = true
 vim.opt.autocomplete = true

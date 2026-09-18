@@ -127,6 +127,8 @@ while idle and caught up, a one-character-at-a-time Braille marquee while
 active, `⚠` when confirmation appears to be required, and `✓` when ready for
 the next prompt in a background window. The completion check disappears while
 you are viewing that window.
+Neovim windows show `` plus the active file's basename when a file is open,
+and update as you move between buffers; unnamed buffers keep the icon-only label.
 The managed Neovim setup includes native startup navigation plus `mini.pick`
 for fuzzy file, grep, recent-file, and project selection, and `flash.nvim` for
 jump motions.

@@ -1,3 +1,24 @@
+# Keep tmux's shell window name in sync with directory changes. tmux's
+# automatic-rename mechanism does not reliably refresh on `cd` alone, so the
+# shell asks the same directory-only resolver to update the current window.
+autoload -Uz add-zsh-hook
+
+dotfiles-refresh-tmux-window-name() {
+  [[ -n "$TMUX" && -n "$TMUX_PANE" ]] || return 0
+  command -v tmux >/dev/null 2>&1 || return 0
+
+  local helper="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/program-name.sh"
+  [[ -x "$helper" ]] || return 0
+
+  local title name
+  title="$(tmux display-message -p -t "$TMUX_PANE" '#{pane_title}' 2>/dev/null)"
+  name="$($helper "$$" "$PWD" "$title" 2>/dev/null)"
+  [[ -n "$name" ]] || return 0
+  tmux rename-window -t "$TMUX_PANE" "$name" 2>/dev/null
+}
+
+add-zsh-hook chpwd dotfiles-refresh-tmux-window-name
+
 # Context-aware backward deletion shared with the Codex PTY wrapper.
 dotfiles-backward-kill-path-component() {
   local prefix="${BUFFER[1,CURSOR]}" suffix="${BUFFER[CURSOR+1,-1]}"
