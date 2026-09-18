@@ -31,7 +31,7 @@ configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
 tmux shows Git and Codex usage information followed by compact, color-graded
-`CPU | MEM` labels at the rightmost edge of the status bar. Each label changes color based
+`CPU MEM` labels at the rightmost edge of the status bar. Each label changes color based
 on its current usage; the full process list and process names are available in the btop
 popup. Git information is for the
 active pane's working directory: it displays the branch (or detached commit)
@@ -58,9 +58,11 @@ dw sbx
 dw --print      # print active config with passwords redacted
 ```
 
-The tmux status bar shows only the compact environment label (`dev`, a sandbox
-number such as `018`, or `XXX`). Sandbox labels use a calm dark green; red is
-reserved for unavailable non-sandbox targets.
+The tmux status bar shows the code version and compact environment label (for
+example `version_test 018`). It starts neutral, checks the configured remote
+target once per project/target/code version per day, then uses calm dark green
+when it is reachable and authenticated or red when it is unavailable or
+authentication fails.
 Press `C-Space` then `e` to toggle the active pane's project and show the
 selected environment. `C-Space` then `d` remains tmux detach.
 

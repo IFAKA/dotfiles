@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 set -u
 
-# Show the active Prophet/DW target for the pane's project. The connectivity
-# result is cached because tmux refreshes the status bar every second.
+# Show the active Prophet/DW target for the pane's project. The remote check is
+# performed once per project/target/code version per calendar day because tmux
+# refreshes the status bar every second.
 directory=${1:-}
 [[ -n "$directory" && -d "$directory" ]] || exit 0
 
@@ -49,36 +50,52 @@ case "${hostname,,}" in
     ;;
 esac
 
-state=offline
+state=unknown
 cache_dir=${TMUX_DW_STATUS_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-dw-status-${UID}}
 mkdir -p "$cache_dir" 2>/dev/null || true
 code_version=$(json_value 'code-version' "$config")
 cache_key=$(printf '%s\t%s\t%s' "$root" "$hostname" "$code_version" | cksum | awk '{print $1}')
 cache_file="$cache_dir/$cache_key"
-now=$(date +%s)
-cache_ttl=${TMUX_DW_STATUS_CACHE_TTL:-15}
+pending_file="$cache_file.pending"
+today=$(date +%Y-%m-%d)
 
 if [[ -r "$cache_file" ]]; then
-  read -r cached_at cached_state < "$cache_file" || true
-  if [[ "${cached_at:-0}" =~ ^[0-9]+$ ]] && (( now - cached_at < cache_ttl )); then
-    state=${cached_state:-offline}
+  read -r cached_day cached_state < "$cache_file" || true
+  if [[ "$cached_day" == "$today" && "$cached_state" == online ]]; then
+    state=online
+  elif [[ "$cached_day" == "$today" && "$cached_state" == offline ]]; then
+    state=offline
   fi
 fi
 
-if [[ "$state" == offline ]] && command -v curl >/dev/null 2>&1; then
+if [[ "$state" == unknown ]]; then
   username=$(json_value username "$config")
   password=$(json_value password "$config")
-  if [[ -n "$username" && -n "$password" && -n "$code_version" ]]; then
-    url="https://${hostname}/on/demandware.servlet/webdav/Sites/Cartridges/${code_version}/"
-    if curl -fsS --max-time 3 -X PROPFIND -H 'Depth: 1' -u "$username:$password" "$url" >/dev/null 2>&1; then
-      state=online
+  if [[ -n "$username" && -n "$password" && -n "$code_version" ]] && command -v curl >/dev/null 2>&1; then
+    if mkdir "$pending_file" 2>/dev/null; then
+      (
+        result=offline
+        url="https://${hostname}/on/demandware.servlet/webdav/Sites/Cartridges/${code_version}/"
+        if curl -fsS --max-time 3 -X PROPFIND -H 'Depth: 1' -u "$username:$password" "$url" >/dev/null 2>&1; then
+          result=online
+        fi
+        tmp_file="$cache_file.$$"
+        printf '%s %s\n' "$today" "$result" > "$tmp_file" 2>/dev/null && mv -f "$tmp_file" "$cache_file"
+        rmdir "$pending_file" 2>/dev/null || true
+      ) </dev/null >/dev/null 2>&1 &
     fi
+  else
+    printf '%s offline\n' "$today" > "$cache_file" 2>/dev/null || true
+    state=offline
   fi
-  printf '%s %s\n' "$now" "$state" > "$cache_file" 2>/dev/null || true
 fi
 
-if [[ "$state" == online || "$environment" == sandbox ]]; then
-  printf '#[fg=colour255,bg=#166534,bold] %s #[default]\n' "$label"
+status_text=$label
+[[ -n "$code_version" ]] && status_text="$code_version $status_text"
+if [[ "$state" == online ]]; then
+  printf '#[fg=colour255,bg=#166534,bold] %s #[default]\n' "$status_text"
+elif [[ "$state" == offline ]]; then
+  printf '#[fg=colour255,bg=colour124,bold] %s #[default]\n' "$status_text"
 else
-  printf '#[fg=colour255,bg=colour124,bold] %s #[default]\n' "$label"
+  printf '#[fg=colour255,bg=colour237,bold] %s #[default]\n' "$status_text"
 fi

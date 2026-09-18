@@ -37,24 +37,29 @@ read -r staged unstaged untracked conflicts < <(
 )
 
 status_kinds=()
+status_symbols=()
 status_counts=()
 if (( staged + unstaged + untracked + conflicts == 0 )); then
   :
 else
   (( conflicts > 0 )) && {
     status_kinds+=(conflict)
+    status_symbols+=('!')
     status_counts+=("$conflicts")
   }
   (( staged > 0 )) && {
     status_kinds+=(staged)
+    status_symbols+=('+')
     status_counts+=("$staged")
   }
   (( unstaged > 0 )) && {
     status_kinds+=(modified)
+    status_symbols+=('~')
     status_counts+=("$unstaged")
   }
   (( untracked > 0 )) && {
     status_kinds+=(untracked)
+    status_symbols+=('?')
     status_counts+=("$untracked")
   }
 fi
@@ -64,10 +69,12 @@ if git -C "$directory" rev-parse --abbrev-ref '@{upstream}' >/dev/null 2>&1; the
   read -r ahead behind <<< "$divergence"
   (( ahead > 0 )) && {
     status_kinds+=(ahead)
+    status_symbols+=('↑')
     status_counts+=("$ahead")
   }
   (( behind > 0 )) && {
     status_kinds+=(behind)
+    status_symbols+=('↓')
     status_counts+=("$behind")
   }
 fi
@@ -75,35 +82,29 @@ fi
 stash_count=$(git -C "$directory" stash list 2>/dev/null | wc -l | tr -d ' ')
 (( stash_count > 0 )) && {
   status_kinds+=(stash)
+  status_symbols+=('⚑')
   status_counts+=("$stash_count")
 }
 
-status_foreground() {
+symbol_foreground() {
   case "$1" in
-    staged|conflict|untracked|behind|stash) printf '255' ;;
-    *) printf '232' ;;
+    conflict) printf 'colour203' ;;
+    staged) printf 'colour114' ;;
+    modified) printf 'colour220' ;;
+    untracked) printf 'colour250' ;;
+    ahead) printf 'colour81' ;;
+    behind) printf 'colour213' ;;
+    stash) printf 'colour177' ;;
   esac
 }
 
-status_background() {
-  case "$1" in
-    conflict) printf 'colour124' ;;
-    staged) printf 'colour22' ;;
-    modified) printf 'colour136' ;;
-    untracked) printf 'colour238' ;;
-    ahead) printf 'colour37' ;;
-    behind) printf 'colour55' ;;
-    stash) printf 'colour90' ;;
-    *) printf 'colour235' ;;
-  esac
-}
-
+printf '#[bg=colour24,bold] '
 for (( index = ${#status_kinds[@]} - 1; index >= 0; index-- )); do
   kind=${status_kinds[index]}
-  foreground=$(status_foreground "$kind")
-  background=$(status_background "$kind")
-  attributes=',bold'
-  printf '#[fg=colour%s,bg=%s%s] %s ' \
-    "$foreground" "$background" "$attributes" "${status_counts[index]}"
+  symbol_color=$(symbol_foreground "$kind")
+  (( index < ${#status_kinds[@]} - 1 )) && printf ' '
+  printf '#[fg=%s]%s#[fg=colour255]%s' \
+    "$symbol_color" "${status_symbols[index]}" "${status_counts[index]}"
 done
-printf '#[fg=colour255,bg=colour24,bold] %s #[default]\n' "$branch"
+(( ${#status_kinds[@]} > 0 )) && printf ' '
+printf '#[fg=colour255]%s #[default]\n' "$branch"

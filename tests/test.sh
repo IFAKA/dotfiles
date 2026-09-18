@@ -32,14 +32,21 @@ grep -q '^bind e run-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment 
 dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
 [[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
 mkdir -p "$test_home/dw-project/nested"
-printf '%s\n' '{' '  "hostname": "development-eu01.example.test"' '}' > "$test_home/dw-project/dw.json"
+printf '%s\n' '{' '  "hostname": "development-eu01.example.test",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
 dw_project_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-project" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project/nested")
-grep -q ' dev ' <<<"$dw_project_output" || fail "DW status did not expose the active environment label"
+grep -q ' version_test dev ' <<<"$dw_project_output" || fail "DW status did not expose the code version and environment"
 printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com"' '}' > "$test_home/dw-project/dw.json"
 dw_sandbox_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-sandbox" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
 grep -q ' 018 ' <<<"$dw_sandbox_output" || fail "DW status did not expose the sandbox number"
-grep -q 'fg=colour255,bg=#166534,bold' <<<"$dw_sandbox_output" || fail "DW sandbox status is not dark green"
-grep -q 'fg=colour255,bg=#166534,bold' "$repo_root/tmux/dw-status.sh" || fail "DW online status color is not the dark green"
+grep -q 'fg=colour255,bg=colour124,bold' <<<"$dw_sandbox_output" || fail "Unavailable DW sandbox status is not red"
+printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
+online_cache="$test_home/dw-cache-online"
+mkdir -p "$online_cache"
+online_key=$(printf '%s\t%s\t%s' "$test_home/dw-project" 'bdlq-018.dx.commercecloud.salesforce.com' 'version_test' | cksum | awk '{print $1}')
+printf '%s online\n' "$(date +%Y-%m-%d)" > "$online_cache/$online_key"
+dw_online_output=$(TMUX_DW_STATUS_CACHE_DIR="$online_cache" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+grep -q ' version_test 018 ' <<<"$dw_online_output" || fail "DW online status did not expose the code version"
+grep -q 'fg=colour255,bg=#166534,bold' <<<"$dw_online_output" || fail "DW online status is not dark green"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
 python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions detector matrix"
@@ -337,19 +344,21 @@ git -C "$git_repo" add tracked.txt
 git -C "$git_repo" commit -qm initial
 assert_output "$(git_status_output "$git_repo")" 'main '
 printf 'changed\n' >> "$git_repo/tracked.txt"
-assert_output "$(git_status_output "$git_repo")" '1 main '
+assert_output "$(git_status_output "$git_repo")" '~1 main '
 printf 'staged\n' > "$git_repo/staged.txt"
 git -C "$git_repo" add staged.txt
 printf 'untracked\n' > "$git_repo/untracked.txt"
 mkdir -p "$git_repo/nested"
 printf 'nested\n' > "$git_repo/nested/inner.txt"
 printf 'fourth\n' > "$git_repo/fourth.txt"
-assert_output "$(git_status_output "$git_repo")" '3 1 1 main '
+assert_output "$(git_status_output "$git_repo")" '?3 ~1 +1 main '
 git_status_raw=$(TMUX_GIT_STATUS_TIMESTAMP=0 "$repo_root/tmux/git-status.sh" "$git_repo")
 [[ "$git_status_raw" != *'tracked.txt'* ]] || fail "changed filenames are still rendered"
-grep -q 'fg=colour255,bg=colour22.*] 1 ' <<<"$git_status_raw" || fail "staged status color missing"
-grep -q 'bg=colour136.*] 1 ' <<<"$git_status_raw" || fail "modified status color missing"
-grep -q 'fg=colour255,bg=colour238.*] 3 ' <<<"$git_status_raw" || fail "untracked status color missing"
+grep -Fq '[fg=colour114]+#[fg=colour255]1' <<<"$git_status_raw" || fail "staged symbol/value color missing"
+grep -Fq '[fg=colour220]~#[fg=colour255]1' <<<"$git_status_raw" || fail "modified symbol/value color missing"
+grep -Fq '[fg=colour250]?#[fg=colour255]3' <<<"$git_status_raw" || fail "untracked symbol/value color missing"
+! grep -qE '[~+?] \[[0-9]' <<<"$git_status_raw" || fail "Git status symbol and value are separated"
+[[ $(grep -o 'bg=colour24' <<<"$git_status_raw" | wc -l | tr -d ' ') == 1 ]] || fail "Git status is split into multiple background components"
 
 conflict_repo=$(mktemp -d "$test_home/conflict-repo.XXXXXX")
 git -C "$conflict_repo" init -q
@@ -367,12 +376,12 @@ printf '%s' main > "$conflict_repo/conflict.txt"
 git -C "$conflict_repo" commit -qam main
 git -C "$conflict_repo" merge side >/dev/null 2>&1 || true
 conflict_status_raw=$("$repo_root/tmux/git-status.sh" "$conflict_repo")
-grep -q 'fg=colour255,bg=colour124,bold] 1 ' <<<"$conflict_status_raw" || fail "conflict status color missing"
+grep -Fq '[fg=colour203]!#[fg=colour255]1' <<<"$conflict_status_raw" || fail "conflict symbol/value color missing"
 
 git -C "$git_repo" stash push -uqm changed
-assert_output "$(git_status_output "$git_repo")" '1 main '
+assert_output "$(git_status_output "$git_repo")" '⚑1 main '
 git -C "$git_repo" checkout --detach -q
-assert_output "$(git_status_output "$git_repo")" "1 $(git -C "$git_repo" rev-parse --short HEAD) "
+assert_output "$(git_status_output "$git_repo")" "⚑1 $(git -C "$git_repo" rev-parse --short HEAD) "
 assert_output "$(git_status_output "$test_home")" ''
 
 fake_bin=$(mktemp -d "$test_home/fake-bin.XXXXXX")
