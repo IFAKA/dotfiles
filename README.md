@@ -1,6 +1,6 @@
 # dotfiles
 
-Small, independent zsh, tmux, btop, Neovim, and mpv configuration for macOS and Linux.
+Small, independent zsh, tmux, DW, btop, Neovim, and mpv configuration for macOS and Linux.
 
 Install the dotfiles components on a new machine:
 
@@ -19,8 +19,9 @@ dotfiles install zsh
 dotfiles install nvim
 dotfiles install
 dotfiles install mpv
+dotfiles install dw
 dotfiles update [tmux|btop|nvim|mpv]
-dotfiles uninstall [tmux|btop|nvim|mpv]
+dotfiles uninstall [tmux|btop|nvim|mpv|dw]
 dotfiles --dry-run
 ```
 
@@ -44,6 +45,24 @@ after pulling changes with:
 ```bash
 dotfiles install tmux --yes
 ```
+
+## DW environments
+
+Install the global DW launcher with `dotfiles install dw`. In a project that
+contains the ignored Prophet files `dw.json`, `dw.dev.json`, and `dw.sbx.json`:
+
+```bash
+dw              # toggle dev ↔ sbx
+dw dev          # select a profile explicitly
+dw sbx
+dw --print      # print active config with passwords redacted
+```
+
+The tmux status bar shows only the compact environment label (`dev`, a sandbox
+number such as `018`, or `XXX`) with dark green meaning reachable/authenticated
+and red meaning unavailable.
+Press `C-Space` then `e` to toggle the active pane's project and show the
+selected environment. `C-Space` then `d` remains tmux detach.
 
 The right side also shows Codex's `5h` and `wk` usage windows. Every tmux
 window reads the same latest cached value. The API is queried only when a Codex

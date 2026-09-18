@@ -17,14 +17,27 @@ resource_status_output() {
   env -u TMUX "$repo_root/tmux/resource-status.sh" | sed -E 's/#\[[^]]*\]//g; s/  +/ /g'
 }
 
-bash -n "$repo_root"/{bootstrap,install,update,uninstall} || fail "shell syntax"
+bash -n "$repo_root"/{bootstrap,install,update,uninstall} "$repo_root/bin/dw" || fail "shell syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
+bash -n "$repo_root/tmux/dw-status.sh" || fail "DW status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
+grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
+grep -q '^bind e run-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
+dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
+[[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
+mkdir -p "$test_home/dw-project/nested"
+printf '%s\n' '{' '  "hostname": "development-eu01.example.test"' '}' > "$test_home/dw-project/dw.json"
+dw_project_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-project" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project/nested")
+grep -q ' dev ' <<<"$dw_project_output" || fail "DW status did not expose the active environment label"
+printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com"' '}' > "$test_home/dw-project/dw.json"
+dw_sandbox_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-sandbox" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+grep -q ' 018 ' <<<"$dw_sandbox_output" || fail "DW status did not expose the sandbox number"
+grep -q 'fg=colour255,bg=#166534,bold' "$repo_root/tmux/dw-status.sh" || fail "DW online status color is not the dark green"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
 python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions detector matrix"
@@ -140,7 +153,26 @@ assert next(target for target in targets if target.value == "notes.txt").action 
 assert next(target for target in module.detect("README.md") if target.value == "README.md").action == "edit"
 PY
 help=$("$repo_root/install" --help)
-grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|btop|nvim|mpv|course|dw' <<<"$help" || fail "help output"
+
+dw_project="$test_home/dw-project"
+printf '%s\n' '{"hostname":"dev.example.test","username":"user","password":"dev-secret","nested":{"password":"nested-secret"}}' > "$dw_project/dw.dev.json"
+printf '%s\n' '{"hostname":"sandbox.example.test","username":"user","password":"sbx-secret"}' > "$dw_project/dw.sbx.json"
+printf '%s\n' '{"hostname":"dev.example.test","username":"user","password":"dev-secret"}' > "$dw_project/dw.json"
+assert_output "$(cd "$dw_project/nested" && "$repo_root/bin/dw")" 'DW environment: sbx'
+grep -q 'sandbox.example.test' "$dw_project/dw.json" || fail "DW toggle did not select sbx"
+assert_output "$("$repo_root/bin/dw" --path "$dw_project" dev)" 'DW environment: dev'
+grep -q 'dev.example.test' "$dw_project/dw.json" || fail "DW explicit selection did not select dev"
+dw_print=$("$repo_root/bin/dw" --path "$dw_project" --print)
+grep -q '"password": "\*\*\*\*\*\*\*\*"' <<<"$dw_print" || fail "DW print did not redact password"
+! grep -q 'dev-secret\|sbx-secret\|nested-secret' <<<"$dw_print" || fail "DW print leaked a password"
+if "$repo_root/bin/dw" --path "$test_home" >/dev/null 2>&1; then fail "DW launcher accepted a directory without dw.json"; fi
+
+"$repo_root/install" install dw --yes
+assert_file "$test_home/.local/bin/dw"
+assert_file "$test_home/.local/bin/.dotfiles-dw-managed"
+"$repo_root/install" uninstall dw --yes
+[[ ! -e "$test_home/.local/bin/dw" ]] || fail "DW uninstall failed"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"

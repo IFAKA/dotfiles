@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Independent zsh, tmux, Neovim, and mpv configuration installer for macOS and Linux.
+# Independent zsh, tmux, DW, Neovim, and mpv configuration installer for macOS and Linux.
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
@@ -20,7 +20,8 @@ tmux_marker="$config_root/tmux/.dotfiles-tmux-managed"
 zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py)
+dw_marker="$HOME/.local/bin/.dotfiles-dw-managed"
+tmux_files=(tmux.conf resource-status.sh git-status.sh dw-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 
@@ -31,7 +32,7 @@ usage() {
   dotfiles — independent zsh, tmux, btop, Neovim, mpv, and course launcher configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course|dw] [--yes] [--dry-run]
 
 Actions:
   install       Install all configured components (default)
@@ -99,6 +100,9 @@ install_packages() {
   fi
   if selected course; then
     command -v mpv >/dev/null 2>&1 || packages+=(mpv)
+  fi
+  if selected dw; then
+    command -v node >/dev/null 2>&1 || packages+=(node)
   fi
   [[ "$dry_run" == true ]] && { echo "  Would install packages: ${packages[*]:-none}"; return; }
   ((${#packages[@]} == 0)) && return
@@ -172,6 +176,17 @@ install_course() {
   chmod +x "$HOME/.local/bin/course"
   printf 'dotfiles manages ~/.local/bin/course.\n' > "$course_marker"
   echo "  course launcher installed (backup: $backup)"
+}
+
+install_dw() {
+  selected dw || return 0
+  [[ -f "$repo_dir/bin/dw" ]] || die "Invalid dw component in checkout"
+  local backup="$HOME/.local/bin/dw.backup.$(date +%s)"
+  if [[ "$dry_run" == true ]]; then echo "  Would install DW launcher into $HOME/.local/bin"; return; fi
+  copy_file "$repo_dir/bin/dw" "$HOME/.local/bin/dw" "$backup"
+  chmod +x "$HOME/.local/bin/dw"
+  printf 'dotfiles manages ~/.local/bin/dw.\n' > "$dw_marker"
+  echo "  DW launcher installed (backup: $backup)"
 }
 
 install_language_servers() {
@@ -347,6 +362,16 @@ uninstall_component() {
     echo "  Removed course launcher (backup: $course_backup)"
     return
   fi
+  if [[ "$kind" == dw ]]; then
+    [[ -f "$dw_marker" ]] || { echo "  dw is not managed; nothing removed."; return; }
+    confirm "Remove managed DW launcher?" || return
+    local dw_file="$HOME/.local/bin/dw" dw_backup="$HOME/.local/bin/dw.uninstall-backup.$(date +%s)"
+    if [[ "$dry_run" == true ]]; then echo "  Would remove $dw_file"; return; fi
+    if [[ -f "$dw_file" ]]; then cp -p "$dw_file" "$dw_backup"; rm -f "$dw_file"; fi
+    rm -f "$dw_marker"
+    echo "  Removed DW launcher (backup: $dw_backup)"
+    return
+  fi
   confirm "Remove managed $kind files?" || return
   if [[ "$dry_run" == true ]]; then echo "  Would remove managed $kind files from $dest"; return; fi
   if [[ "$kind" == nvim ]]; then
@@ -383,7 +408,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      zsh|tmux|btop|nvim|mpv|course) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      zsh|tmux|btop|nvim|mpv|course|dw) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -398,7 +423,7 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; selected dw && uninstall_component dw; exit 0; fi
 install_packages "$os"
 install_zsh
 check_nvim
@@ -409,4 +434,5 @@ install_nvim
 install_language_servers
 install_mpv
 install_course
+install_dw
 echo "dotfiles $action complete."

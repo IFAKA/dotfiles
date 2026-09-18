@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+usage() {
+  cat <<'EOF'
+Usage: dw [profile] [--print] [--path DIRECTORY]
+
+Switch the nearest project's active dw.json between its ignored profiles.
+Profiles are named dw.<profile>.json, for example dw.dev.json and dw.sbx.json.
+EOF
+}
+
+die() { printf 'dw: %s\n' "$*" >&2; exit 1; }
+
+path=$PWD
+profile=
+print_config=false
+while (($#)); do
+  case "$1" in
+    --path) (($# >= 2)) || die "--path requires a directory"; path=$2; shift 2 ;;
+    --print) print_config=true; shift ;;
+    -h|--help) usage; exit 0 ;;
+    --) shift; (($# == 1)) || die "expected one profile name"; profile=$1; shift ;;
+    -*) die "unknown option '$1'" ;;
+    '') die "profile name cannot be empty" ;;
+    *) [[ -z "$profile" ]] || die "expected one profile name"; profile=$1; shift ;;
+  esac
+done
+
+[[ -d "$path" ]] || die "directory does not exist: $path"
+path=$(cd -P "$path" && pwd)
+root=
+current=$path
+while :; do
+  if [[ -f "$current/dw.json" ]]; then root=$current; break; fi
+  [[ "$current" == / ]] && break
+  current=${current%/*}; [[ -n "$current" ]] || current=/
+done
+[[ -n "$root" ]] || die "no DW project found (expected dw.json in this directory or a parent)"
+command -v node >/dev/null 2>&1 || die "Node.js is required to read DW JSON safely"
+
+json_value() {
+  node - "$1" "$2" <<'NODE'
+const fs = require('fs');
+const [file, key] = process.argv.slice(2);
+try {
+  const value = JSON.parse(fs.readFileSync(file, 'utf8'))[key];
+  if (value !== undefined && value !== null) process.stdout.write(String(value));
+} catch (error) {
+  console.error(`invalid JSON in ${file}: ${error.message}`); process.exit(1);
+}
+NODE
+}
+
+redacted_print() {
+  node - "$1" <<'NODE'
+const fs = require('fs');
+const file = process.argv[2];
+function redact(value) {
+  if (Array.isArray(value)) return value.map(redact);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) =>
+      [key, /pass(word)?|secret|token/i.test(key) ? '********' : redact(item)]));
+  }
+  return value;
+}
+try {
+  process.stdout.write(`${JSON.stringify(redact(JSON.parse(fs.readFileSync(file, 'utf8'))), null, 2)}\n`);
+} catch (error) {
+  console.error(`invalid JSON in ${file}: ${error.message}`); process.exit(1);
+}
+NODE
+}
+
+active="$root/dw.json"
+if [[ "$print_config" == true ]]; then redacted_print "$active"; exit 0; fi
+
+declare -A profiles=()
+for file in "$root"/dw.*.json; do
+  [[ -f "$file" ]] || continue
+  name=${file##*/}; name=${name#dw.}; name=${name%.json}
+  [[ -n "$name" ]] && profiles["$name"]=$file
+done
+((${#profiles[@]} > 0)) || die "no DW profiles found (expected files such as dw.dev.json or dw.sbx.json)"
+
+if [[ -z "$profile" ]]; then
+  [[ -n "${profiles[dev]:-}" && -n "${profiles[sbx]:-}" ]] || \
+    die "toggle requires both dw.dev.json and dw.sbx.json; choose an available profile explicitly"
+  active_hostname=$(json_value "$active" hostname)
+  dev_hostname=$(json_value "${profiles[dev]}" hostname)
+  if [[ -n "$active_hostname" && "$active_hostname" == "$dev_hostname" ]]; then profile=sbx; else profile=dev; fi
+fi
+
+source_profile=${profiles[$profile]:-}
+[[ -n "$source_profile" ]] || die "profile '$profile' not found (available: ${!profiles[*]})"
+tmp=$(mktemp "$root/.dw.json.XXXXXX")
+trap 'rm -f "$tmp"' EXIT
+cp -p "$source_profile" "$tmp"
+mv -f "$tmp" "$active"
+printf 'DW environment: %s\n' "$profile"
