@@ -75,10 +75,10 @@ remaining_color() {
 usage_value() {
   local percent="$1" reset="$2"
   if [[ "$percent" == -- ]]; then
-    printf '#[bg=colour238,fg=colour255,bold]--%%#[bg=colour238,fg=colour255] --'
+    printf '#[fg=colour255,bold]--%%#[fg=colour255] --'
     return
   fi
-  printf '#[bg=colour238,fg=%s,bold]%s%%#[bg=colour238,fg=colour255,bold] %s' \
+  printf '#[fg=%s,bold]%s%%#[fg=colour255,bold] %s' \
     "$(remaining_color "$percent")" "$percent" "$(format_reset "$reset")"
 }
 
@@ -138,6 +138,6 @@ if [[ -f "$cache_file" ]]; then
   }
 fi
 
-printf '#[bg=colour238,fg=colour238]#[bg=colour238,fg=colour255,bold] 5h #[bg=colour238,fg=colour255]%s#[bg=colour238,fg=colour255] | #[bg=colour238,fg=colour255,bold]wk #[bg=colour238,fg=colour255]%s#[bg=colour238] #[default]' \
+printf '#[fg=colour255,bold] 5h #[fg=colour255]%s#[fg=colour255] | #[fg=colour255,bold]wk #[fg=colour255]%s#[fg=colour255] #[default]' \
   "$(usage_value "$primary_percent" "$primary_reset")" \
   "$(usage_value "$secondary_percent" "$secondary_reset")"
