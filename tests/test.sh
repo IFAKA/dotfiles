@@ -61,6 +61,8 @@ location = next(target for target in targets if target.value == "src/main.py:42:
 assert (location.row, location.column) == (1, 9), location
 assert module.parse_location("src/main.py:42:8") == ("src/main.py", 42, 8)
 assert module.open_command(next(target for target in targets if target.type == "url"))[1] == "https://example.com/docs"
+repository = next(target for target in module.detect("IFAKA/dotfiles.git") if target.type == "repository")
+assert module.repository_url(repository, None) == "https://github.com/IFAKA/dotfiles", repository
 os.environ["EDITOR"] = "nvim"
 assert any("+call cursor(42,8)" in part for part in module.edit_command(location, None))
 command = next(target for target in targets if target.type == "command")
@@ -93,6 +95,10 @@ values = [target.value for target in targets]
 assert values.count("https://example.com/a?q=1") == 1, values
 assert "999.1.1.1" not in values, values
 assert "10.0.0.1:8080" in values, values
+assert "github.com" not in values, values
+assert "e0910bc..3ec830f" not in values, values
+assert "main...origin/main" not in values, values
+assert "HOME/.config/tmux/smart-actions.py" not in values, values
 response = next(target for target in targets if target.type == "codex-response")
 assert response.value == "latest response\nline two", response.value
 assert not any(target.type == "codex-resume" for target in module.detect("$ codex resume not-a-uuid"))
@@ -130,7 +136,8 @@ targets = module.detect("src/main.py image.png recording.mp4 notes.txt")
 assert next(target for target in targets if target.value == "src/main.py").action == "edit", targets
 assert next(target for target in targets if target.value == "image.png").action == "open", targets
 assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
-assert next(target for target in targets if target.value == "notes.txt").action == "open", targets
+assert next(target for target in targets if target.value == "notes.txt").action == "edit", targets
+assert next(target for target in module.detect("README.md") if target.value == "README.md").action == "edit"
 PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"

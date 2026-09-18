@@ -31,6 +31,7 @@ URL = re.compile(r"(?<![\w@])(?:https?://|ftp://|www\.)[^\s<>\"']+")
 LOCATION = re.compile(r"(?<![\w./-])(?:~?/|\.?\.?/|(?:[\w.-]+/)+)[^\s:,()<>\"']+:(\d+)(?::(\d+))?")
 PATH = re.compile(r"(?<![\w@])(?:~?/|\.?\.?/)[^\s<>\"'`()\[\]{},;]+|(?<![\w@])(?:[\w.-]+/)+[\w.-]+")
 FILE = re.compile(r"(?<![\w@])(?:[\w.-]+\.[a-z0-9][\w.-]*|Dockerfile|Justfile|Makefile)(?![\w.-])", re.I)
+REPOSITORY = re.compile(r"(?<![\w@])(?:(?P<host>[\w.-]+):)?(?P<repo>[\w.-]+/[\w.-]+\.git)(?![\w.-])", re.I)
 HASH = re.compile(r"(?<![\w])[0-9a-f]{7,40}(?![\w])", re.I)
 REF = re.compile(r"(?<![\w])(?:#\d+|PRs?\s+#?\d+|issues?\s+#?\d+|(?:branch|commit)[ /:#-]+[\w./-]+)(?![\w])", re.I)
 IP = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
@@ -45,8 +46,14 @@ EDITABLE_FILE_EXTENSIONS = frozenset({
     "dart", "env", "ex", "exs", "fish", "go", "gql", "graphql", "h", "hh", "hpp",
     "hs", "html", "ini", "java", "jl", "js", "json", "jsx", "kt", "kts", "less",
     "lua", "php", "pl", "ps1", "py", "rb", "rs", "scss", "sh", "sql", "svelte",
-    "swift", "tex", "toml", "ts", "tsx", "vim", "vue", "xml", "yaml", "yml",
+    "swift", "tex", "toml", "ts", "tsx", "txt", "vim", "vue", "xml", "yaml", "yml",
+    "md", "markdown",
     "zig", "zsh",
+})
+DETECTABLE_FILE_EXTENSIONS = EDITABLE_FILE_EXTENSIONS | frozenset({
+    "bmp", "csv", "gif", "jpeg", "jpg", "log", "md", "markdown", "mov", "mp3",
+    "mp4", "pdf", "png", "svg", "tif", "tiff", "tsv", "txt", "webm", "webp", "xlsx",
+    "xls", "zip",
 })
 
 
@@ -56,6 +63,22 @@ def file_action(value: str) -> str:
         return "edit"
     suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
     return "edit" if suffix in EDITABLE_FILE_EXTENSIONS else "open"
+
+
+def is_file_candidate(value: str) -> bool:
+    filename = value.rsplit("/", 1)[-1]
+    if filename.lower() in {"dockerfile", "justfile", "makefile"}:
+        return True
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return suffix in DETECTABLE_FILE_EXTENSIONS
+
+
+def is_path_candidate(value: str) -> bool:
+    if value.startswith("HOME/"):
+        return False
+    if value.startswith(("/", "~/", "./", "../", "$HOME/", "${HOME}/")):
+        return True
+    return is_file_candidate(value)
 
 
 def clean(value: str) -> str:
@@ -114,6 +137,8 @@ def detect(text: str) -> list[Target]:
             value = clean(match.group())
             if not value.startswith(("http", "//")):
                 add("location", value, row, display_column(line, match.start()), "edit")
+        for match in REPOSITORY.finditer(line):
+            add("repository", match.group(), row, display_column(line, match.start()), "open")
         for match in REF.finditer(line):
             add("git-ref", match.group(), row, display_column(line, match.start()))
         for expression, kind, action in ((PATH, "path", None), (FILE, "path", None),
@@ -122,6 +147,10 @@ def detect(text: str) -> list[Target]:
             for match in expression.finditer(line):
                 start = display_column(line, match.start())
                 if expression is FILE and IP.fullmatch(match.group()):
+                    continue
+                if expression is FILE and not is_file_candidate(match.group()):
+                    continue
+                if expression is PATH and not is_path_candidate(match.group()):
                     continue
                 if not any(overlaps(t, row, start, cell_width(match.group())) for t in result):
                     value = match.group()
@@ -173,9 +202,9 @@ def detect(text: str) -> list[Target]:
         if value:
             add("codex-response", value, start, 0)
 
-    priority = {"location": 0, "url": 1, "path": 2, "error": 3, "codex-resume": 4,
-                "command": 5, "codex-response": 6, "git-ref": 7, "git-hash": 8,
-                "json": 9, "code": 10, "ip": 11, "timestamp": 12}
+    priority = {"location": 0, "url": 1, "repository": 2, "path": 3, "error": 4, "codex-resume": 5,
+                "command": 6, "codex-response": 7, "git-ref": 8, "git-hash": 9,
+                "json": 10, "code": 11, "ip": 12, "timestamp": 13}
     return sorted(result, key=lambda item: (priority.get(item.type, 99), -item.row, item.column))
 
 
@@ -188,7 +217,51 @@ def editor() -> list[str]:
     return shlex.split(os.environ.get("VISUAL") or os.environ.get("EDITOR") or "") or ["nvim"]
 
 
-def open_command(target: Target) -> list[str] | None:
+def pane_cwd(pane_id: str | None) -> str:
+    cwd = os.getcwd()
+    tmux = shutil.which("tmux")
+    if tmux and pane_id:
+        try:
+            cwd = subprocess.check_output(
+                [tmux, "display-message", "-p", "-t", pane_id, "#{pane_current_path}"],
+                text=True,
+            ).strip() or cwd
+        except (OSError, subprocess.CalledProcessError):
+            pass
+    return cwd
+
+
+def repository_url(target: Target, pane_id: str | None) -> str:
+    match = REPOSITORY.fullmatch(target.value)
+    if not match:
+        return target.value
+    repo = match.group("repo")
+    host = match.group("host")
+    remote = None
+    try:
+        remote = subprocess.check_output(
+            ["git", "-C", pane_cwd(pane_id), "remote", "get-url", "origin"],
+            text=True,
+            stderr=subprocess.DEVNULL,
+        ).strip()
+    except (OSError, subprocess.CalledProcessError):
+        pass
+    if remote:
+        remote = re.sub(r"\.git$", "", remote)
+        if remote.startswith(("http://", "https://")):
+            return remote
+        remote_match = re.match(r"^[^@]+@([^:]+):(.+)$", remote)
+        if remote_match:
+            return f"https://{remote_match.group(1)}/{remote_match.group(2).removesuffix('.git')}"
+    if host:
+        return f"https://{host}/{repo.removesuffix('.git')}"
+    return f"https://github.com/{repo.removesuffix('.git')}"
+
+
+def open_command(target: Target, pane_id: str | None = None) -> list[str] | None:
+    if target.type == "repository":
+        value = repository_url(target, pane_id)
+        return [("open" if sys.platform == "darwin" else "xdg-open"), value]
     if target.type == "url":
         value = target.value if "://" in target.value else f"https://{target.value}"
         return [("open" if sys.platform == "darwin" else "xdg-open"), value]
@@ -248,7 +321,7 @@ def smart_action(text: str, row: int, column: int, pane_id: str | None) -> int:
     if pane_id and shutil.which("tmux"):
         subprocess.run(["tmux", "copy-mode", "-q", "-t", pane_id], check=False, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if target.action == "open":
-        command = open_command(target)
+        command = open_command(target, pane_id)
         if command:
             subprocess.run(command, check=False)
     elif target.action == "edit":
