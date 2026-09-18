@@ -47,11 +47,12 @@ dotfiles install tmux --yes
 ```
 
 The Vercel chip appears only for directories inside a linked project with
-`.vercel/project.json`. Its colored triangle icon shows the latest deployment
-state and rotates while a deployment is in progress. Checks run asynchronously
-and reuse a 30-second
-per-project cache; set `TMUX_VERCEL_STATUS_CACHE_DIR` or
-`TMUX_VERCEL_STATUS_TTL` to override the cache location or TTL.
+`.vercel/project.json`. Installing the tmux component adds a managed Git
+`post-push` hook through the configured `core.hooksPath`. After a successful
+push, a short-lived watcher records deploying, ready, failed, or unavailable
+state and the status bar only reads that latest state. Existing repository-local
+`post-push` hooks are chained. Dashboard-only or externally triggered Vercel
+deployments do not emit a local Git event and are not shown.
 
 ## DW environments
 

@@ -21,7 +21,7 @@ zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
 dw_marker="$HOME/.local/bin/.dotfiles-dw-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh dw-status.sh vercel-status.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py)
+tmux_files=(tmux.conf resource-status.sh git-status.sh dw-status.sh vercel-status.sh vercel-deploy-common.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 
@@ -262,6 +262,44 @@ install_tmux_plugins() {
   echo "  tmux plugins installed (TPM, tmux-easy-motion, agent-usage-tmux)"
 }
 
+git_hooks_dir() {
+  local configured
+  configured=$(git config --global --get core.hooksPath 2>/dev/null || true)
+  if [[ -z "$configured" ]]; then
+    printf '%s\n' "$config_root/git/hooks"
+  elif [[ "$configured" = /* ]]; then
+    printf '%s\n' "$configured"
+  else
+    printf '%s/%s\n' "$HOME" "$configured"
+  fi
+}
+
+install_vercel_hook() {
+  local hooks_dir hook backup
+  hooks_dir=$(git_hooks_dir)
+  hook="$hooks_dir/post-push"
+  backup="$hooks_dir/post-push.dotfiles-user"
+  if [[ "$dry_run" == true ]]; then
+    echo "  Would install the Vercel post-push hook into $hooks_dir"
+    return
+  fi
+  command -v git >/dev/null 2>&1 || die "git is required to install the Vercel post-push hook"
+  mkdir -p "$hooks_dir"
+  if [[ -f "$hook" ]] && ! grep -q '^# dotfiles-managed-vercel-post-push$' "$hook"; then
+    [[ -e "$backup" ]] || cp -p "$hook" "$backup"
+    rm -f "$hook"
+  fi
+  copy_file "$repo_dir/tmux/post-push" "$hook" "$hooks_dir/post-push.dotfiles-backup"
+  chmod +x "$hook"
+  copy_file "$repo_dir/tmux/vercel-deploy-watch.sh" "$hooks_dir/vercel-deploy-watch.sh" "$hooks_dir/vercel-deploy-watch.backup"
+  chmod +x "$hooks_dir/vercel-deploy-watch.sh"
+  copy_file "$repo_dir/tmux/vercel-deploy-common.sh" "$hooks_dir/vercel-deploy-common.sh" "$hooks_dir/vercel-deploy-common.backup"
+  if [[ -z "$(git config --global --get core.hooksPath 2>/dev/null || true)" ]]; then
+    git config --global core.hooksPath "$hooks_dir"
+  fi
+  echo "  Vercel post-push hook installed in $hooks_dir"
+}
+
 install_nvim() {
   selected nvim || return 0
   local dest backup file
@@ -296,6 +334,7 @@ install_tmux() {
   for file in "${tmux_files[@]}"; do
     copy_file "$repo_dir/tmux/$file" "$dest/$file" "$backup/$file"
   done
+  install_vercel_hook
   printf 'dotfiles manages tmux.conf.\n' > "$tmux_marker"
   echo "  tmux installed (backup: $backup)"
 }
@@ -386,6 +425,14 @@ uninstall_component() {
       if [[ -f "$dest/$file" ]]; then mkdir -p "$backup"; cp -p "$dest/$file" "$backup/$file"; rm -f "$dest/$file"; found=true; fi
     done
     rm -f "$tmux_marker"
+    hooks_dir=$(git_hooks_dir)
+    if [[ -f "$hooks_dir/post-push" ]] && grep -q '^# dotfiles-managed-vercel-post-push$' "$hooks_dir/post-push"; then
+      rm -f "$hooks_dir/post-push"
+      if [[ -f "$hooks_dir/post-push.dotfiles-user" ]]; then
+        mv "$hooks_dir/post-push.dotfiles-user" "$hooks_dir/post-push"
+      fi
+    fi
+    rm -f "$hooks_dir/vercel-deploy-watch.sh" "$hooks_dir/vercel-deploy-common.sh"
     for file in "${btop_files[@]}"; do
       if [[ -f "$config_root/btop/$file" ]]; then
         mkdir -p "$backup/btop"

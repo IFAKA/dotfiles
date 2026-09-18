@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# dotfiles-managed-vercel-post-push
+set -u
+
+script_dir=$(cd -P "$(dirname "$0")" && pwd)
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+project_file="$root/.vercel/project.json"
+[[ -f "$project_file" ]] || exit 0
+source "$script_dir/vercel-deploy-common.sh"
+project_id=$(vercel_json_value projectId "$project_file")
+[[ -n "$project_id" ]] || exit 0
+cache_file=$(vercel_cache_file "$root" "$project_id")
+lock="$cache_file.lock"
+
+user_hook="$root/.git/hooks/post-push"
+vercel_write_state "$cache_file" deploying || exit 0
+if [[ -x "$user_hook" && "$user_hook" != "$0" && "$user_hook" != "$script_dir/post-push" ]]; then
+  "$user_hook" "$@"
+  user_status=$?
+else
+  user_status=0
+fi
+if mkdir "$lock" 2>/dev/null; then
+  nohup bash "$script_dir/vercel-deploy-watch.sh" "$root" "$project_id" "$cache_file" "$lock" </dev/null >/dev/null 2>&1 &
+fi
+tmux refresh-client -S >/dev/null 2>&1 || true
+exit "$user_status"

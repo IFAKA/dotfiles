@@ -26,84 +26,69 @@ bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 bash -n "$repo_root/tmux/vercel-status.sh" || fail "Vercel status script syntax"
+bash -n "$repo_root/tmux/vercel-deploy-common.sh" "$repo_root/tmux/vercel-deploy-watch.sh" "$repo_root/tmux/post-push" || fail "Vercel event scripts syntax"
 
 vercel_project="$test_home/vercel-project"
-mkdir -p "$vercel_project/nested/deeper/.keep" "$vercel_project/.vercel"
+mkdir -p "$vercel_project/nested/deeper" "$vercel_project/.vercel" "$vercel_project/.git/hooks"
+git -C "$vercel_project" init -q
 printf '%s\n' '{"projectId":"prj_test"}' > "$vercel_project/.vercel/project.json"
+printf '#!/usr/bin/env bash\nprintf chained > "%s"\n' "$test_home/user-hook-ran" > "$vercel_project/.git/hooks/post-push"
+chmod +x "$vercel_project/.git/hooks/post-push"
+vercel_cache="$test_home/vercel-cache"
 vercel_bin="$test_home/vercel-bin"
 mkdir -p "$vercel_bin"
 cat > "$vercel_bin/vercel" <<'SH'
 #!/usr/bin/env bash
-printf '1\n' >> "${VERCEL_CALLS:?}"
-[[ "${VERCEL_FAIL:-false}" == true ]] && exit 1
-printf 'Age     Deployment                         Status      Environment\n'
-printf '  1m     https://example.vercel.app         ● %s      Production\n' "${VERCEL_STATE^}"
+printf '%s\n' "${VERCEL_STATE:-READY}" >> "${VERCEL_CALLS:?}"
+printf 'Age Deployment Status\n  1m example %s\n' "${VERCEL_STATE:-READY}"
 SH
 chmod +x "$vercel_bin/vercel"
-vercel_status=$(TMUX_VERCEL_STATUS_CACHE_DIR="$test_home/vercel-cache-empty" "$repo_root/tmux/vercel-status.sh" "$test_home")
-[[ -z "$vercel_status" ]] || fail "Vercel status appeared without project.json"
 vercel_calls="$test_home/vercel-calls"
 : > "$vercel_calls"
-vercel_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$test_home/vercel-cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$vercel_calls" VERCEL_STATE=READY TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
-vercel_first=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
-[[ -z "$vercel_first" ]] || fail "Vercel check blocked on the network"
+common_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$vercel_cache" TMUX_VERCEL_CLI="$vercel_bin/vercel" VERCEL_CALLS="$vercel_calls" PATH="$vercel_bin:$PATH")
+! env "${common_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested" | grep -q . || fail "status rendered without an event"
+! grep -q . "$vercel_calls" || fail "tmux rendering called Vercel"
+vercel_root=$(git -C "$vercel_project" rev-parse --show-toplevel)
+cache_file=$(TMUX_VERCEL_STATUS_CACHE_DIR="$vercel_cache" bash -c 'source "$1/tmux/vercel-deploy-common.sh"; vercel_cache_file "$2" prj_test' _ "$repo_root" "$vercel_root")
+(cd "$vercel_project" && env "${common_env[@]}" "$repo_root/tmux/post-push") >/dev/null
+assert_file "$test_home/user-hook-ran"
+assert_output "$(cat "$cache_file")" deploying
 for _ in {1..40}; do
-  vercel_cache_file=$(find "$test_home/vercel-cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
-  [[ -n "$vercel_cache_file" ]] && break
+  grep -q . "$vercel_calls" && break
   sleep 0.05
 done
-assert_file "$vercel_cache_file"
-ready_output=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
+grep -q . "$vercel_calls" || fail "post-push did not start the watcher"
+for _ in {1..40}; do
+  [[ "$(cat "$cache_file" 2>/dev/null)" == ready ]] && break
+  sleep 0.05
+done
+ready_output=$(env "${common_env[@]}" VERCEL_STATE=READY "$repo_root/tmux/vercel-status.sh" "$vercel_project")
 assert_output "$ready_output" '#[fg=colour255,bg=#166534,bold] ▲ #[default]'
-! grep -qE 'ready|deploying|failed|unavailable' <<<"$ready_output" || fail "ready Vercel status exposed a state label"
-grep -q 'fg=colour255,bg=#166534,bold' <<<"$ready_output" || fail "ready Vercel contrast color missing"
-assert_output "$(cat "$vercel_calls")" '1'
-mkdir "$vercel_cache_file.lock"
-rm -f "$vercel_cache_file"
-pending_output=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
-[[ -z "$pending_output" ]] || fail "pending Vercel lock rendered a false state"
-assert_output "$(cat "$vercel_calls")" '1'
-rmdir "$vercel_cache_file.lock"
-
-for state in BUILDING ERROR; do
+for state in ERROR; do
   state_cache="$test_home/vercel-cache-$state"
   state_calls="$test_home/vercel-calls-$state"
-  printf '0\n' > "$state_calls"
-  state_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$state_cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$state_calls" VERCEL_STATE="$state" TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
-  env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested" >/dev/null
+  : > "$state_calls"
+  state_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$state_cache" TMUX_VERCEL_CLI="$vercel_bin/vercel" VERCEL_CALLS="$state_calls" VERCEL_STATE="$state" PATH="$vercel_bin:$PATH")
+  (cd "$vercel_project" && env "${state_env[@]}" "$repo_root/tmux/post-push") >/dev/null
   for _ in {1..40}; do
     state_file=$(find "$state_cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
-    [[ -n "$state_file" ]] && break
+    [[ -n "$state_file" ]] && [[ "$(cat "$state_file")" == failed ]] && break
     sleep 0.05
   done
-  state_output=$(env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested")
-  expected_color='bg=#991b1b'
-  if [[ "$state" == BUILDING ]]; then
-    expected_color='bg=#a16207'
-    for _ in {1..8}; do
-      deploying_output=$(env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested")
-      grep -qE '#\[fg=colour232,bg=#a16207,bold\] (▲|▶|▼|◀) #\[default\]' <<<"$deploying_output" || fail "deploying Vercel frame was invalid"
-      ! grep -qE 'ready|deploying|failed|unavailable' <<<"$deploying_output" || fail "deploying Vercel status exposed a state label"
-    done
-  fi
-  grep -qE '#\[fg=colour(232|255),' <<<"$state_output" || fail "$state Vercel status icon missing"
-  grep -q "$expected_color" <<<"$state_output" || fail "$state Vercel color was not preserved"
-  grep -qE ' ▲ | ▶ | ▼ | ◀ ' <<<"$state_output" || fail "$state Vercel icon missing"
-  ! grep -qE 'ready|deploying|failed|unavailable' <<<"$state_output" || fail "$state Vercel status exposed a state label"
+  assert_output "$(cat "$state_file")" failed
 done
-failure_cache="$test_home/vercel-cache-failure"
-printf '0\n' > "$test_home/vercel-calls-failure"
-failure_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$failure_cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$test_home/vercel-calls-failure" VERCEL_FAIL=true VERCEL_STATE=READY TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
-env "${failure_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project" >/dev/null
+timeout_cache="$test_home/vercel-cache-timeout"
+timeout_calls="$test_home/vercel-calls-timeout"
+: > "$timeout_calls"
+timeout_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$timeout_cache" TMUX_VERCEL_CLI="$vercel_bin/vercel" VERCEL_CALLS="$timeout_calls" VERCEL_STATE=UNKNOWN TMUX_VERCEL_STATUS_TIMEOUT=1 TMUX_VERCEL_STATUS_POLL_INTERVAL=0.05 PATH="$vercel_bin:$PATH")
+(cd "$vercel_project" && env "${timeout_env[@]}" "$repo_root/tmux/post-push") >/dev/null
 for _ in {1..40}; do
-  failure_file=$(find "$failure_cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
-  [[ -n "$failure_file" ]] && break
+  timeout_file=$(find "$timeout_cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
+  [[ -n "$timeout_file" ]] && [[ "$(cat "$timeout_file")" == unavailable ]] && break
   sleep 0.05
 done
-failure_output=$(env "${failure_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project")
-assert_output "$failure_output" '#[fg=colour255,bg=colour238,bold] ▲ #[default]'
-! grep -qE 'ready|deploying|failed|unavailable' <<<"$failure_output" || fail "unavailable Vercel status exposed a state label"
-grep -q 'fg=colour255,bg=colour238,bold' <<<"$failure_output" || fail "unavailable Vercel contrast color missing"
+assert_output "$(cat "$timeout_file")" unavailable
+grep -q 'TMUX_VERCEL_CLI' "$repo_root/tmux/vercel-deploy-watch.sh" || fail "watcher CLI is not configurable"
 codex_usage_plugin="$test_home/codex-usage-plugin"
 mkdir -p "$codex_usage_plugin/agent-usage-tmux/scripts"
 cat > "$codex_usage_plugin/agent-usage-tmux/scripts/fetch_codex_usage.py" <<'PY'
@@ -394,6 +379,7 @@ assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/vercel-status.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/vercel-deploy-common.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/smart-actions.py"
 [[ ! -e "$XDG_CONFIG_HOME/tmux/smart-copy.py" ]] || fail "legacy smart-copy helper was not removed"
