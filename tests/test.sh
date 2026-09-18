@@ -442,9 +442,9 @@ assert_output "$(cat "$usage_calls")" '8'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m | wk 80% 1m |'
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
-grep -q 'fg=colour186,bg=colour237,bold]CPU ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
+grep -Fq 'fg=colour186,bg=colour237,bold]CPU#[fg=colour255,bg=colour237,bold] ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
 grep -q 'fg=colour114,bg=colour237,bold]MEM ' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
 grep -q 'bg=colour237,fg=colour255,bold]#\[default\]$' <<<"$resource_status_raw" || fail "resource status trailing reset missing"
 ! grep -q 'bg=colour238' "$repo_root/tmux/codex-usage.sh" || fail "Codex usage still overrides the status background"
