@@ -340,7 +340,12 @@ for _ in {1..40}; do
   sleep 0.05
 done
 assert_file "$usage_cache/default/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m | wk 80% 1m |'
+assert_output "$(cat "$usage_calls")" '4'
+printf '0 80 86400 80 43200\n' > "$usage_cache/default/usage"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1d | wk 80% 12h |'
+printf '0 80 3600 80 0\n' > "$usage_cache/default/usage"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1h | wk 80% 0m |'
 assert_output "$(cat "$usage_calls")" '4'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
