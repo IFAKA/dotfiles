@@ -25,6 +25,73 @@ bash -n "$repo_root/tmux/dw-status.sh" || fail "DW status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
 bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
 bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
+bash -n "$repo_root/tmux/vercel-status.sh" || fail "Vercel status script syntax"
+
+vercel_project="$test_home/vercel-project"
+mkdir -p "$vercel_project/nested/deeper/.keep" "$vercel_project/.vercel"
+printf '%s\n' '{"projectId":"prj_test"}' > "$vercel_project/.vercel/project.json"
+vercel_bin="$test_home/vercel-bin"
+mkdir -p "$vercel_bin"
+cat > "$vercel_bin/vercel" <<'SH'
+#!/usr/bin/env bash
+printf '1\n' >> "${VERCEL_CALLS:?}"
+[[ "${VERCEL_FAIL:-false}" == true ]] && exit 1
+printf 'Age     Deployment                         Status      Environment\n'
+printf '  1m     https://example.vercel.app         ● %s      Production\n' "${VERCEL_STATE^}"
+SH
+chmod +x "$vercel_bin/vercel"
+vercel_status=$(TMUX_VERCEL_STATUS_CACHE_DIR="$test_home/vercel-cache-empty" "$repo_root/tmux/vercel-status.sh" "$test_home")
+[[ -z "$vercel_status" ]] || fail "Vercel status appeared without project.json"
+vercel_calls="$test_home/vercel-calls"
+: > "$vercel_calls"
+vercel_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$test_home/vercel-cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$vercel_calls" VERCEL_STATE=READY TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
+vercel_first=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
+[[ -z "$vercel_first" ]] || fail "Vercel check blocked on the network"
+for _ in {1..40}; do
+  vercel_cache_file=$(find "$test_home/vercel-cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
+  [[ -n "$vercel_cache_file" ]] && break
+  sleep 0.05
+done
+assert_file "$vercel_cache_file"
+ready_output=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
+grep -q '▲ ready' <<<"$ready_output" || fail "ready Vercel status missing"
+grep -q 'fg=colour255,bg=#166534,bold' <<<"$ready_output" || fail "ready Vercel contrast color missing"
+assert_output "$(cat "$vercel_calls")" '1'
+mkdir "$vercel_cache_file.lock"
+rm -f "$vercel_cache_file"
+pending_output=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
+[[ -z "$pending_output" ]] || fail "pending Vercel lock rendered a false state"
+assert_output "$(cat "$vercel_calls")" '1'
+rmdir "$vercel_cache_file.lock"
+
+for state in BUILDING ERROR; do
+  state_cache="$test_home/vercel-cache-$state"
+  state_calls="$test_home/vercel-calls-$state"
+  printf '0\n' > "$state_calls"
+  state_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$state_cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$state_calls" VERCEL_STATE="$state" TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
+  env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested" >/dev/null
+  for _ in {1..40}; do
+    state_file=$(find "$state_cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
+    [[ -n "$state_file" ]] && break
+    sleep 0.05
+  done
+  state_output=$(env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested")
+  expected_state=failed
+  [[ "$state" == BUILDING ]] && expected_state=deploying
+  grep -q "▲ $expected_state" <<<"$state_output" || fail "$state Vercel state was not mapped"
+done
+failure_cache="$test_home/vercel-cache-failure"
+printf '0\n' > "$test_home/vercel-calls-failure"
+failure_env=(TMUX_VERCEL_STATUS_CACHE_DIR="$failure_cache" TMUX_VERCEL_STATUS_TTL=300 VERCEL_CALLS="$test_home/vercel-calls-failure" VERCEL_FAIL=true VERCEL_STATE=READY TMUX_VERCEL_CLI="$vercel_bin/vercel" PATH="$vercel_bin:$PATH")
+env "${failure_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project" >/dev/null
+for _ in {1..40}; do
+  failure_file=$(find "$failure_cache" -type f ! -name '*.lock' -print -quit 2>/dev/null || true)
+  [[ -n "$failure_file" ]] && break
+  sleep 0.05
+done
+failure_output=$(env "${failure_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project")
+grep -q '▲ unavailable' <<<"$failure_output" || fail "Vercel CLI failure was shown as deployment failure"
+grep -q 'fg=colour255,bg=colour238,bold' <<<"$failure_output" || fail "unavailable Vercel contrast color missing"
 codex_usage_plugin="$test_home/codex-usage-plugin"
 mkdir -p "$codex_usage_plugin/agent-usage-tmux/scripts"
 cat > "$codex_usage_plugin/agent-usage-tmux/scripts/fetch_codex_usage.py" <<'PY'
@@ -314,6 +381,7 @@ assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/vercel-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/smart-actions.py"
 [[ ! -e "$XDG_CONFIG_HOME/tmux/smart-copy.py" ]] || fail "legacy smart-copy helper was not removed"
@@ -512,9 +580,15 @@ grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" ||
 grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
 status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")
 git_position=${status_right%%git-status.sh*}
+vercel_position=${status_right%%vercel-status.sh*}
 resource_position=${status_right%%resource-status.sh*}
 codex_position=${status_right%%codex-usage.sh*}
-[[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && "$codex_position" != "$status_right" && ${#git_position} -lt ${#codex_position} && ${#codex_position} -lt ${#resource_position} ]] || fail "resource status is not rightmost"
+[[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && "$vercel_position" != "$status_right" && "$codex_position" != "$status_right" && ${#git_position} -lt ${#vercel_position} && ${#vercel_position} -lt ${#codex_position} && ${#codex_position} -lt ${#resource_position} ]] || fail "status bar ordering changed"
+grep -q 'vercel-status.sh' "$repo_root/tmux/tmux.conf" || fail "Vercel status is missing from the status bar"
+grep -q 'bg=#166534' "$repo_root/tmux/vercel-status.sh" || fail "ready Vercel status color is missing"
+grep -q 'bg=#a16207' "$repo_root/tmux/vercel-status.sh" || fail "deploying Vercel status color is missing"
+grep -q 'bg=#991b1b' "$repo_root/tmux/vercel-status.sh" || fail "failed Vercel status color is missing"
+grep -q 'bg=colour238' "$repo_root/tmux/vercel-status.sh" || fail "unavailable Vercel status color is missing"
 
 if command -v tmux >/dev/null 2>&1; then
   tmux -L dotfiles-test -f "$XDG_CONFIG_HOME/tmux/tmux.conf" new-session -d -s verify
@@ -540,14 +614,21 @@ if command -v nvim >/dev/null 2>&1; then
   nvim --headless -u "$XDG_CONFIG_HOME/nvim/init.lua" -c 'qa!'
   nvim --headless --clean >/dev/null 2>&1 &
   nvim_pid=$!
-  nvim_label=$("$repo_root/tmux/program-name.sh" "$nvim_pid" "$test_home" ' init.lua')
+  nvim_label=''
+  for _ in {1..20}; do
+    nvim_label=$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" "$nvim_pid" "$test_home" ' init.lua')
+    if [[ "$nvim_label" == ' init.lua' ]]; then
+      break
+    fi
+    sleep 0.05
+  done
   kill "$nvim_pid" 2>/dev/null || true
   wait "$nvim_pid" 2>/dev/null || true
   assert_output "$nvim_label" ' init.lua'
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-actions.py" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/vercel-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-actions.py" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

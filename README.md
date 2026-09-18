@@ -30,7 +30,7 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows Git and Codex usage information followed by compact, color-graded
+tmux shows Git, Vercel deployment, and Codex usage information followed by compact, color-graded
 `CPU MEM` labels at the rightmost edge of the status bar. Each label changes color based
 on its current usage; the full process list and process names are available in the btop
 popup. Git information is for the
@@ -45,6 +45,12 @@ after pulling changes with:
 ```bash
 dotfiles install tmux --yes
 ```
+
+The Vercel chip appears only for directories inside a linked project with
+`.vercel/project.json`. Its background, triangle icon, and readable label show
+the latest deployment state. Checks run asynchronously and reuse a 30-second
+per-project cache; set `TMUX_VERCEL_STATUS_CACHE_DIR` or
+`TMUX_VERCEL_STATUS_TTL` to override the cache location or TTL.
 
 ## DW environments
 
