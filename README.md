@@ -47,8 +47,9 @@ dotfiles install tmux --yes
 ```
 
 The Vercel chip appears only for directories inside a linked project with
-`.vercel/project.json`. Its background, triangle icon, and readable label show
-the latest deployment state. Checks run asynchronously and reuse a 30-second
+`.vercel/project.json`. Its colored triangle icon shows the latest deployment
+state and rotates while a deployment is in progress. Checks run asynchronously
+and reuse a 30-second
 per-project cache; set `TMUX_VERCEL_STATUS_CACHE_DIR` or
 `TMUX_VERCEL_STATUS_TTL` to override the cache location or TTL.
 

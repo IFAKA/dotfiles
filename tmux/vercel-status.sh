@@ -24,10 +24,13 @@ json_value() {
 
 render() {
   case "$1" in
-    ready) printf '#[fg=colour255,bg=#166534,bold] ▲ ready #[default]\n' ;;
-    deploying) printf '#[fg=colour232,bg=#a16207,bold] ▲ deploying #[default]\n' ;;
-    failed) printf '#[fg=colour255,bg=#991b1b,bold] ▲ failed #[default]\n' ;;
-    unavailable) printf '#[fg=colour255,bg=colour238,bold] ▲ unavailable #[default]\n' ;;
+    ready) printf '#[fg=colour255,bg=#166534,bold] ▲ #[default]\n' ;;
+    deploying)
+      local frames=(▲ ▶ ▼ ◀)
+      printf '#[fg=colour232,bg=#a16207,bold] %s #[default]\n' "${frames[$(( $(date +%s) % 4 ))]}"
+      ;;
+    failed) printf '#[fg=colour255,bg=#991b1b,bold] ▲ #[default]\n' ;;
+    unavailable) printf '#[fg=colour255,bg=colour238,bold] ▲ #[default]\n' ;;
   esac
 }
 

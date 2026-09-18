@@ -54,7 +54,8 @@ for _ in {1..40}; do
 done
 assert_file "$vercel_cache_file"
 ready_output=$(env "${vercel_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested/deeper")
-grep -q '▲ ready' <<<"$ready_output" || fail "ready Vercel status missing"
+assert_output "$ready_output" '#[fg=colour255,bg=#166534,bold] ▲ #[default]'
+! grep -qE 'ready|deploying|failed|unavailable' <<<"$ready_output" || fail "ready Vercel status exposed a state label"
 grep -q 'fg=colour255,bg=#166534,bold' <<<"$ready_output" || fail "ready Vercel contrast color missing"
 assert_output "$(cat "$vercel_calls")" '1'
 mkdir "$vercel_cache_file.lock"
@@ -76,9 +77,19 @@ for state in BUILDING ERROR; do
     sleep 0.05
   done
   state_output=$(env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested")
-  expected_state=failed
-  [[ "$state" == BUILDING ]] && expected_state=deploying
-  grep -q "▲ $expected_state" <<<"$state_output" || fail "$state Vercel state was not mapped"
+  expected_color='bg=#991b1b'
+  if [[ "$state" == BUILDING ]]; then
+    expected_color='bg=#a16207'
+    for _ in {1..8}; do
+      deploying_output=$(env "${state_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project/nested")
+      grep -qE '#\[fg=colour232,bg=#a16207,bold\] (▲|▶|▼|◀) #\[default\]' <<<"$deploying_output" || fail "deploying Vercel frame was invalid"
+      ! grep -qE 'ready|deploying|failed|unavailable' <<<"$deploying_output" || fail "deploying Vercel status exposed a state label"
+    done
+  fi
+  grep -qE '#\[fg=colour(232|255),' <<<"$state_output" || fail "$state Vercel status icon missing"
+  grep -q "$expected_color" <<<"$state_output" || fail "$state Vercel color was not preserved"
+  grep -qE ' ▲ | ▶ | ▼ | ◀ ' <<<"$state_output" || fail "$state Vercel icon missing"
+  ! grep -qE 'ready|deploying|failed|unavailable' <<<"$state_output" || fail "$state Vercel status exposed a state label"
 done
 failure_cache="$test_home/vercel-cache-failure"
 printf '0\n' > "$test_home/vercel-calls-failure"
@@ -90,7 +101,8 @@ for _ in {1..40}; do
   sleep 0.05
 done
 failure_output=$(env "${failure_env[@]}" "$repo_root/tmux/vercel-status.sh" "$vercel_project")
-grep -q '▲ unavailable' <<<"$failure_output" || fail "Vercel CLI failure was shown as deployment failure"
+assert_output "$failure_output" '#[fg=colour255,bg=colour238,bold] ▲ #[default]'
+! grep -qE 'ready|deploying|failed|unavailable' <<<"$failure_output" || fail "unavailable Vercel status exposed a state label"
 grep -q 'fg=colour255,bg=colour238,bold' <<<"$failure_output" || fail "unavailable Vercel contrast color missing"
 codex_usage_plugin="$test_home/codex-usage-plugin"
 mkdir -p "$codex_usage_plugin/agent-usage-tmux/scripts"
