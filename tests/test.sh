@@ -340,7 +340,7 @@ for _ in {1..40}; do
   sleep 0.05
 done
 assert_file "$usage_cache/default/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m | '
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m |'
 assert_output "$(cat "$usage_calls")" '4'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
@@ -354,7 +354,7 @@ assert_output "$(cat "$usage_calls")" '8'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102)" ''
-assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" 'CPU | MEM '
+assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU | MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'fg=colour186,bg=colour237,bold]CPU ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
 grep -q 'fg=colour114,bg=colour237,bold]MEM ' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
