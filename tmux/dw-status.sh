@@ -30,13 +30,19 @@ hostname=$(json_value hostname "$config")
 [[ -n "$hostname" ]] || exit 0
 
 label=$hostname
+environment=unknown
 case "${hostname,,}" in
-  *development*|*dev*) label=dev ;;
+  *development*|*dev*)
+    label=dev
+    environment=dev
+    ;;
   *)
     if [[ $hostname =~ (^|[-.])([0-9]{3})([-.]|$) ]]; then
       label=${BASH_REMATCH[2]}
+      environment=sandbox
     elif [[ "${hostname,,}" == *sandbox* || "${hostname,,}" == *sbx* ]]; then
       label=sbx
+      environment=sandbox
     else
       label=XXX
     fi
@@ -71,7 +77,7 @@ if [[ "$state" == offline ]] && command -v curl >/dev/null 2>&1; then
   printf '%s %s\n' "$now" "$state" > "$cache_file" 2>/dev/null || true
 fi
 
-if [[ "$state" == online ]]; then
+if [[ "$state" == online || "$environment" == sandbox ]]; then
   printf '#[fg=colour255,bg=#166534,bold] %s #[default]\n' "$label"
 else
   printf '#[fg=colour255,bg=colour124,bold] %s #[default]\n' "$label"

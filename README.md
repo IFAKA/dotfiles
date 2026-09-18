@@ -59,8 +59,8 @@ dw --print      # print active config with passwords redacted
 ```
 
 The tmux status bar shows only the compact environment label (`dev`, a sandbox
-number such as `018`, or `XXX`) with dark green meaning reachable/authenticated
-and red meaning unavailable.
+number such as `018`, or `XXX`). Sandbox labels use a calm dark green; red is
+reserved for unavailable non-sandbox targets.
 Press `C-Space` then `e` to toggle the active pane's project and show the
 selected environment. `C-Space` then `d` remains tmux detach.
 

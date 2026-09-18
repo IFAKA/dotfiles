@@ -37,6 +37,7 @@ grep -q ' dev ' <<<"$dw_project_output" || fail "DW status did not expose the ac
 printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com"' '}' > "$test_home/dw-project/dw.json"
 dw_sandbox_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-sandbox" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
 grep -q ' 018 ' <<<"$dw_sandbox_output" || fail "DW status did not expose the sandbox number"
+grep -q 'fg=colour255,bg=#166534,bold' <<<"$dw_sandbox_output" || fail "DW sandbox status is not dark green"
 grep -q 'fg=colour255,bg=#166534,bold' "$repo_root/tmux/dw-status.sh" || fail "DW online status color is not the dark green"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
