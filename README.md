@@ -57,7 +57,15 @@ dw              # toggle dev ↔ sbx
 dw dev          # select a profile explicitly
 dw sbx
 dw --print      # print active config with passwords redacted
+dw --migrate    # import legacy profiles before removing them
 ```
+
+For an existing project, run `dw --migrate` while `dw.json`, `dw.dev.json`, and
+`dw.sbx.json` still exist. It copies both legacy profiles (and the active
+configuration) into `~/.config/dotfiles/dw/` without changing the project.
+After verifying the import, you can remove `dw.dev.json` and `dw.sbx.json`;
+`dw.json` remains for Prophet.nvim. If a legacy profile is incomplete or has
+invalid JSON, migration stops before writing that profile.
 
 If the project has only `dw.json`, the first toggle opens a keyboard form and
 stores the Dev/Sandbox profiles outside the repository under

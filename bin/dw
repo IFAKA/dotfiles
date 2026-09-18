@@ -3,10 +3,11 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: dw [profile] [--print] [--path DIRECTORY]
+Usage: dw [profile] [--print] [--migrate] [--path DIRECTORY]
 
 Switch the nearest project's active dw.json between its ignored profiles.
 Profiles are named dw.<profile>.json, for example dw.dev.json and dw.sbx.json.
+Use --migrate to copy legacy profiles into the external store before removing them.
 EOF
 }
 
@@ -15,10 +16,12 @@ die() { printf 'dw: %s\n' "$*" >&2; exit 1; }
 path=$PWD
 profile=
 print_config=false
+migrate=false
 while (($#)); do
   case "$1" in
     --path) (($# >= 2)) || die "--path requires a directory"; path=$2; shift 2 ;;
     --print) print_config=true; shift ;;
+    --migrate) migrate=true; shift ;;
     -h|--help) usage; exit 0 ;;
     --) shift; (($# == 1)) || die "expected one profile name"; profile=$1; shift ;;
     -*) die "unknown option '$1'" ;;
@@ -74,6 +77,11 @@ NODE
 
 active="$root/dw.json"
 if [[ "$print_config" == true ]]; then redacted_print "$active"; exit 0; fi
+
+if [[ "$migrate" == true ]]; then
+  [[ -z "$profile" ]] || die "--migrate cannot be combined with a profile"
+  exec node "$(dirname "$0")/dw-setup.js" "$root" --migrate
+fi
 
 declare -A profiles=()
 for file in "$root"/dw.*.json; do

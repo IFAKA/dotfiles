@@ -73,7 +73,30 @@ function redact(value) {
 }
 
 function usage() {
-  console.log('Usage: dw-setup.js ROOT [dev|sbx]');
+  console.log('Usage: dw-setup.js ROOT [dev|sbx|--migrate]');
+}
+
+function migrate(root) {
+  const store = projectStore(root);
+  const imported = [];
+  for (const name of ['dev', 'sbx']) {
+    const legacyFile = path.join(root, `dw.${name}.json`);
+    if (!fs.existsSync(legacyFile)) continue;
+    const profile = readJson(legacyFile);
+    if (!complete(profile)) {
+      fail(`cannot migrate ${legacyFile}: it is missing hostname, username, password, or code-version`);
+      return;
+    }
+    writeJsonAtomic(path.join(store, `${name}.json`), profile);
+    imported.push(name);
+  }
+
+  const active = readJson(path.join(root, 'dw.json'));
+  const activeName = classify(active);
+  writeJsonAtomic(path.join(store, `${activeName}.json`), active);
+  if (!imported.includes(activeName)) imported.unshift(activeName);
+  console.log(`DW profiles imported to ${store}: ${imported.join(', ')}.`);
+  console.log('Project files were not changed. Verify the import, then remove dw.dev.json and dw.sbx.json if desired.');
 }
 
 function setup(root, requestedTarget) {
@@ -239,7 +262,8 @@ function setup(root, requestedTarget) {
 
 const root = process.argv[2];
 const requestedTarget = process.argv[3];
-if (!root || !['dev', 'sbx', undefined].includes(requestedTarget)) {
+if (!root || !['dev', 'sbx', '--migrate', undefined].includes(requestedTarget)) {
   usage(); process.exit(2);
 }
-setup(root, requestedTarget);
+if (requestedTarget === '--migrate') migrate(root);
+else setup(root, requestedTarget);
