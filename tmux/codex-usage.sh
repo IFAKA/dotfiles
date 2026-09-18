@@ -138,6 +138,6 @@ if [[ -f "$cache_file" ]]; then
   }
 fi
 
-printf '#[fg=colour255,bold] 5h #[fg=colour255]%s#[fg=colour255] | #[fg=colour255,bold]wk #[fg=colour255]%s#[fg=colour255] #[default]' \
+printf '#[fg=colour255,bold] 5h #[fg=colour255]%s#[fg=colour255] | #[fg=colour255,bold]wk #[fg=colour255]%s#[fg=colour255]#[default]' \
   "$(usage_value "$primary_percent" "$primary_reset")" \
   "$(usage_value "$secondary_percent" "$secondary_reset")"
