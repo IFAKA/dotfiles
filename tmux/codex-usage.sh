@@ -4,8 +4,11 @@ set -euo pipefail
 plugin_root="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/tmux/plugins}"
 fetch_script="$plugin_root/agent-usage-tmux/scripts/fetch_codex_usage.py"
 
-pane_pid=${1:-}
-[[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
+mode=${1:-}
+if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
+  pane_pid=$mode
+  [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
+fi
 
 process_command() {
   ps -o command= -p "$1" 2>/dev/null | sed 's/^ *//'
@@ -21,8 +24,18 @@ has_codex_process() {
   return 1
 }
 
-has_codex_process "$pane_pid" || exit 0
 [[ -f "$fetch_script" ]] || exit 0
+
+if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
+  has_codex_process "$pane_pid" || exit 0
+fi
+
+cache_dir="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-usage-${UID}}"
+cache_file="$cache_dir/usage"
+attempt_file="$cache_dir/last-attempt"
+refresh_lock="$cache_dir/.refresh.lock"
+refresh_interval="${TMUX_CODEX_USAGE_REFRESH_INTERVAL:-300}"
+[[ "$refresh_interval" =~ ^[1-9][0-9]*$ ]] || refresh_interval=300
 
 format_reset() {
   local seconds="$1"
@@ -57,13 +70,71 @@ remaining_color() {
 }
 
 usage_value() {
-  local window="$1"
-  local percent reset
-  percent=$(python3 "$fetch_script" --window "$window" 2>/dev/null) || return 0
-  reset=$(python3 "$fetch_script" --window "$window" --field reset_in 2>/dev/null) || reset=0
+  local percent="$1" reset="$2"
+  if [[ "$percent" == -- ]]; then
+    printf '#[bg=colour238,fg=colour255,bold]--%%#[bg=colour238,fg=colour255] --'
+    return
+  fi
   printf '#[bg=colour238,fg=%s,bold]%s%%#[bg=colour238,fg=colour255,bold] %s' \
     "$(remaining_color "$percent")" "$percent" "$(format_reset "$reset")"
 }
 
+refresh_usage() {
+  local primary_percent primary_reset secondary_percent secondary_reset temporary
+  primary_percent=$(python3 "$fetch_script" --window primary 2>/dev/null) || return 1
+  primary_reset=$(python3 "$fetch_script" --window primary --field reset_in 2>/dev/null) || return 1
+  secondary_percent=$(python3 "$fetch_script" --window secondary 2>/dev/null) || return 1
+  secondary_reset=$(python3 "$fetch_script" --window secondary --field reset_in 2>/dev/null) || return 1
+  [[ "$primary_percent" =~ ^[0-9]+$ && "$primary_reset" =~ ^[0-9]+$ &&
+    "$secondary_percent" =~ ^[0-9]+$ && "$secondary_reset" =~ ^[0-9]+$ ]] || return 1
+  temporary=$(mktemp "$cache_dir/.usage.XXXXXX")
+  printf '%s %s %s %s %s\n' "$(date +%s)" "$primary_percent" "$primary_reset" \
+    "$secondary_percent" "$secondary_reset" > "$temporary"
+  mv -f "$temporary" "$cache_file"
+}
+
+schedule_refresh() {
+  local now last_attempt=0
+  now=$(date +%s)
+  if [[ -f "$attempt_file" ]]; then
+    read -r last_attempt < "$attempt_file" || true
+  fi
+  [[ "$last_attempt" =~ ^[0-9]+$ ]] || last_attempt=0
+  (( now - last_attempt >= refresh_interval )) || return 0
+
+  mkdir -p "$cache_dir"
+  mkdir "$refresh_lock" 2>/dev/null || return 0
+  printf '%s\n' "$now" > "$attempt_file"
+  nohup bash "$0" --refresh >/dev/null 2>&1 &
+}
+
+if [[ "$mode" == --refresh ]]; then
+  trap 'rmdir "$refresh_lock" 2>/dev/null || true' EXIT
+  refresh_usage || exit 0
+  exit 0
+fi
+
+if [[ "$mode" == --trigger ]]; then
+  schedule_refresh
+  exit 0
+fi
+
+fetched_at=0
+primary_percent=--
+primary_reset=0
+secondary_percent=--
+secondary_reset=0
+if [[ -f "$cache_file" ]]; then
+  read -r fetched_at primary_percent primary_reset secondary_percent secondary_reset < "$cache_file" || true
+  [[ "$fetched_at" =~ ^[0-9]+$ && "$primary_percent" =~ ^[0-9]+$ &&
+    "$primary_reset" =~ ^[0-9]+$ && "$secondary_percent" =~ ^[0-9]+$ &&
+    "$secondary_reset" =~ ^[0-9]+$ ]] || {
+    fetched_at=0
+    primary_percent=--
+    secondary_percent=--
+  }
+fi
+
 printf '#[bg=colour238,fg=colour238]#[bg=colour238,fg=colour255,bold] 5h #[bg=colour238,fg=colour255]%s#[bg=colour238,fg=colour255] | #[bg=colour238,fg=colour255,bold]wk #[bg=colour238,fg=colour255]%s#[bg=colour238] #[default]' \
-  "$(usage_value primary)" "$(usage_value secondary)"
+  "$(usage_value "$primary_percent" "$primary_reset")" \
+  "$(usage_value "$secondary_percent" "$secondary_reset")"

@@ -317,15 +317,34 @@ fi
 EOF
 chmod +x "$fake_bin/ps"
 usage_plugin="$test_home/tmux-plugins/agent-usage-tmux/scripts"
+usage_cache="$test_home/codex-usage-cache"
+usage_calls="$test_home/codex-usage-calls"
+printf '0\n' > "$usage_calls"
 mkdir -p "$usage_plugin"
 cat > "$usage_plugin/fetch_codex_usage.py" <<'EOF'
 #!/usr/bin/env python3
+import os
+from pathlib import Path
 import sys
+
+calls = Path(os.environ["CODEX_USAGE_CALLS"])
+calls.write_text(str(int(calls.read_text()) + 1))
 print('80' if '--field' not in sys.argv else '80')
 EOF
 chmod +x "$usage_plugin/fetch_codex_usage.py"
-assert_output "$(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" PATH="$fake_bin:$PATH" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m '
-assert_output "$(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" PATH="$fake_bin:$PATH" "$repo_root/tmux/codex-usage.sh" 102)" ''
+usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_CODEX_USAGE_CACHE_DIR="$usage_cache" TMUX_CODEX_USAGE_REFRESH_INTERVAL=60 CODEX_USAGE_CALLS="$usage_calls" PATH="$fake_bin:$PATH")
+first_usage=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
+env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger
+for _ in {1..40}; do
+  [[ -f "$usage_cache/usage" ]] && break
+  sleep 0.05
+done
+assert_file "$usage_cache/usage"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m '
+assert_output "$(cat "$usage_calls")" '4'
+env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
+assert_output "$(cat "$usage_calls")" '4'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102)" ''
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' ● CPU | ● MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -q 'bg=colour235,fg=colour255,bold] ' <<<"$resource_status_raw" || fail "CPU leading space missing"

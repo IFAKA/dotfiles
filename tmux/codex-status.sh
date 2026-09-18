@@ -20,21 +20,31 @@ read_state() {
   watcher_pid=0
   frame=0
   marquee_tick=0
+  usage_triggered=0
+  action_required=0
   if [[ -f "$state_file" ]]; then
-    read -r notified busy watcher_pid frame marquee_tick < "$state_file" || true
+    read -r notified busy watcher_pid frame marquee_tick usage_triggered action_required < "$state_file" || true
     [[ "$notified" =~ ^[01]$ ]] || notified=0
     [[ "$busy" =~ ^[01]$ ]] || busy=0
     [[ "$watcher_pid" =~ ^[0-9]+$ ]] || watcher_pid=0
     [[ "$frame" =~ ^[0-9]+$ ]] || frame=0
     [[ "$marquee_tick" =~ ^[0-9]+$ ]] || marquee_tick=0
+    [[ "$usage_triggered" =~ ^[01]$ ]] || usage_triggered=0
+    [[ "$action_required" =~ ^[01]$ ]] || action_required=0
   fi
 }
 
 write_state() {
   local temporary
   temporary=$(mktemp "$state_dir/.state.XXXXXX")
-  printf '%s %s %s %s %s\n' "$notified" "$busy" "$watcher_pid" "$frame" "$marquee_tick" >"$temporary"
+  printf '%s %s %s %s %s %s %s\n' "$notified" "$busy" "$watcher_pid" "$frame" "$marquee_tick" "$usage_triggered" "$action_required" >"$temporary"
   mv -f "$temporary" "$state_file"
+}
+
+request_usage_refresh() {
+  local usage_script="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/codex-usage.sh"
+  [[ -f "$usage_script" ]] || return 0
+  nohup bash "$usage_script" --trigger >/dev/null 2>&1 &
 }
 
 print_loading_marquee() {
@@ -106,7 +116,19 @@ has_codex_process() {
   return 1
 }
 
-has_codex_process "$pane_pid" || exit 0
+if ! has_codex_process "$pane_pid"; then
+  usage_triggered=0
+  write_state
+  exit 0
+fi
+
+if [[ "$usage_triggered" == 0 ]]; then
+  # The first observation means Codex has opened in this window. Switching
+  # back to an already-observed window remains cache-only.
+  request_usage_refresh
+  usage_triggered=1
+  write_state
+fi
 
 screen=$(tmux capture-pane -p -t "$pane_id" -S -80 2>/dev/null || true)
 [[ -n "$screen" ]] || exit 0
@@ -117,6 +139,10 @@ status_line=$(tail -n 12 <<<"$screen" | grep -E '^[[:space:]]*[•·—][[:space
 # Only inspect the live prompt/status area. Searching the whole transcript
 # makes ordinary words in Codex's explanations look like state changes.
 if grep -Eiq '^[[:space:]]*(Allow|Approve|Run this command|Would you like to|Continue)[^[:cntrl:]]*(\?|$)|^[[:space:]]*[\[(][Yy]/[Nn][\])]' <<<"$recent"; then
+  if [[ "$action_required" == 0 ]]; then
+    request_usage_refresh
+    action_required=1
+  fi
   busy=1
   write_state
   printf ' ⚠\n'
@@ -127,6 +153,7 @@ fi
 # existing busy state while it is present; otherwise keep the idle AI icon
 # visible while the user is composing a prompt.
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]+[^[:space:]] && ! "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything[[:space:]]*$ ]]; then
+  action_required=0
   if [[ "$busy" == 1 ]]; then
     print_loading_marquee
   else
@@ -138,6 +165,7 @@ fi
 # These phrases are emitted in the live status line while a turn or MCP tool
 # is active.
 if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Reading|Running|Applying|Exploring|Implementing|Testing|Verifying)([[:space:]]|\(|$)|^[[:space:]]*[•·].*esc to interrupt' <<<"$status_line"; then
+  action_required=0
   if [[ "$busy" != 1 ]]; then
     frame=0
     marquee_tick=0
@@ -148,8 +176,10 @@ if grep -Eiq '^[[:space:]]*[•·][[:space:]]*(Working|Thinking|Searching|Readin
 fi
 
 if [[ "$current_prompt" =~ ^[[:space:]]*›[[:space:]]*(Ask[[:space:]]Codex[[:space:]]to[[:space:]]do[[:space:]]anything)?[[:space:]]*$ ]]; then
+  action_required=0
   if [[ "$busy" == 1 ]]; then
     busy=0
+    request_usage_refresh
     if [[ "$window_active" == 1 ]]; then
       notified=0
     else
