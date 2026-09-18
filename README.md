@@ -65,9 +65,10 @@ overlay. `C-Space` then `[` followed by `Space` reaches the same wrapper from
 copy mode. All three entry paths use identical behavior. Lowercase
 labels behave exactly as EasyMotion always has. If the final label character is
 uppercase, the selection completes and copy mode exits; the selected URL is opened,
-a file or `path:line:column` location is opened in a new tmux Neovim window, and
-other useful terminal values (commands, errors, Git references, JSON/code blocks,
-timestamps, IPs, or the latest Codex response) are copied. There is no Smart Copy
+a code file or `path:line:column` location is opened in a new tmux Neovim window;
+media and other non-code files open with the system default application; and other
+useful terminal values (commands, errors, Git references, JSON/code blocks,
+timestamps, IPs, or the latest Codex response) are copied. There is no Smart Actions
 popup or separate menu. The detector is local and deterministic.
 
 tmux also names windows from the application running in the active pane. For a

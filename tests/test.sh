@@ -26,13 +26,13 @@ bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
 grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
 grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
-python3 -m py_compile "$repo_root/tmux/smart-copy.py" || fail "smart copy detector syntax"
-python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart copy detector matrix"
+python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
+python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions detector matrix"
 import importlib.util
 import os
 import sys
 
-spec = importlib.util.spec_from_file_location("smart_copy", sys.argv[1])
+spec = importlib.util.spec_from_file_location("smart_actions", sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
@@ -40,7 +40,7 @@ spec.loader.exec_module(module)
 sample = """URL https://example.com/docs.
 Location src/main.py:42:8
 Path ./README.md
-Git 3f2a1bc branch feature/smart-copy PR #123
+Git 3f2a1bc branch feature/smart-actions PR #123
 $ git status --short
 ERROR src/server.ts:88:14: refused
 IP 192.168.1.25 at 12:30:45
@@ -69,11 +69,11 @@ assert module.target_contains(command, command.row, command.column + len(command
 assert module.target_contains(code, 8, 3)
 assert module.smart_action(sample, 99, 99, None) == 0
 PY
-python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart copy adversarial cases"
+python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions adversarial cases"
 import importlib.util
 import sys
 
-spec = importlib.util.spec_from_file_location("smart_copy_stress", sys.argv[1])
+spec = importlib.util.spec_from_file_location("smart_actions_stress", sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
@@ -101,12 +101,12 @@ assert bare_resume.value == "codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b",
 assert module.detect("") == []
 assert module.detect("😀 https://example.com/😀!")[0].column == 3
 PY
-python3 - "$repo_root/tmux/smart-copy.py" <<'PY' || fail "smart action side effects"
+python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart action side effects"
 import importlib.util
 import sys
 from types import SimpleNamespace
 
-spec = importlib.util.spec_from_file_location("smart_copy_actions", sys.argv[1])
+spec = importlib.util.spec_from_file_location("smart_actions_side_effects", sys.argv[1])
 module = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = module
 spec.loader.exec_module(module)
@@ -125,6 +125,12 @@ ran.clear()
 assert module.smart_action("10.0.0.1", 0, 4, None) == 0
 assert ran == [], ran
 assert copied == ["10.0.0.1"], copied
+
+targets = module.detect("src/main.py image.png recording.mp4 notes.txt")
+assert next(target for target in targets if target.value == "src/main.py").action == "edit", targets
+assert next(target for target in targets if target.value == "image.png").action == "open", targets
+assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
+assert next(target for target in targets if target.value == "notes.txt").action == "open", targets
 PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course' <<<"$help" || fail "help output"
@@ -226,7 +232,8 @@ assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
-assert_file "$XDG_CONFIG_HOME/tmux/smart-copy.py"
+assert_file "$XDG_CONFIG_HOME/tmux/smart-actions.py"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/smart-copy.py" ]] || fail "legacy smart-copy helper was not removed"
 assert_file "$XDG_CONFIG_HOME/tmux/resource-monitor.sh"
 assert_file "$XDG_CONFIG_HOME/btop/btop.conf"
 [[ ! -e "$XDG_CONFIG_HOME/nvim" ]] || fail "tmux install touched nvim"
@@ -436,7 +443,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-copy.py" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-actions.py" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

@@ -3,7 +3,7 @@ set -euo pipefail
 
 plugin_root="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/tmux/plugins}"
 plugin_dir="${plugin_root%/}/tmux-easy-motion"
-semantic_action="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/smart-copy.py"
+semantic_action="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/smart-actions.py"
 
 [[ -x "$plugin_dir/scripts/easy_motion.sh" ]] || exit 0
 [[ -f "$semantic_action" ]] || exit 0

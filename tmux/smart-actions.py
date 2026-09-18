@@ -30,7 +30,7 @@ class Target:
 URL = re.compile(r"(?<![\w@])(?:https?://|ftp://|www\.)[^\s<>\"']+")
 LOCATION = re.compile(r"(?<![\w./-])(?:~?/|\.?\.?/|(?:[\w.-]+/)+)[^\s:,()<>\"']+:(\d+)(?::(\d+))?")
 PATH = re.compile(r"(?<![\w@])(?:~?/|\.?\.?/)[^\s<>\"'`()\[\]{},;]+|(?<![\w@])(?:[\w.-]+/)+[\w.-]+")
-FILE = re.compile(r"(?<![\w@])[\w.-]+\.(?:c|cc|cpp|go|h|hpp|java|js|json|lua|md|py|rb|rs|sh|sql|toml|ts|tsx|txt|yaml|yml)(?![\w.-])", re.I)
+FILE = re.compile(r"(?<![\w@])(?:[\w.-]+\.[a-z0-9][\w.-]*|Dockerfile|Justfile|Makefile)(?![\w.-])", re.I)
 HASH = re.compile(r"(?<![\w])[0-9a-f]{7,40}(?![\w])", re.I)
 REF = re.compile(r"(?<![\w])(?:#\d+|PRs?\s+#?\d+|issues?\s+#?\d+|(?:branch|commit)[ /:#-]+[\w./-]+)(?![\w])", re.I)
 IP = re.compile(r"(?<![\w.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\w.])")
@@ -40,6 +40,22 @@ CODEX_RESUME = re.compile(
     r"(?<![\w-])codex\s+resume\s+[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?![\w-])",
     re.I,
 )
+EDITABLE_FILE_EXTENSIONS = frozenset({
+    "asm", "astro", "bash", "bat", "c", "cc", "clj", "cljs", "conf", "cpp", "css",
+    "dart", "env", "ex", "exs", "fish", "go", "gql", "graphql", "h", "hh", "hpp",
+    "hs", "html", "ini", "java", "jl", "js", "json", "jsx", "kt", "kts", "less",
+    "lua", "php", "pl", "ps1", "py", "rb", "rs", "scss", "sh", "sql", "svelte",
+    "swift", "tex", "toml", "ts", "tsx", "vim", "vue", "xml", "yaml", "yml",
+    "zig", "zsh",
+})
+
+
+def file_action(value: str) -> str:
+    filename = value.rsplit("/", 1)[-1]
+    if filename.lower() in {"dockerfile", "justfile", "makefile"}:
+        return "edit"
+    suffix = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
+    return "edit" if suffix in EDITABLE_FILE_EXTENSIONS else "open"
 
 
 def clean(value: str) -> str:
@@ -100,13 +116,17 @@ def detect(text: str) -> list[Target]:
                 add("location", value, row, display_column(line, match.start()), "edit")
         for match in REF.finditer(line):
             add("git-ref", match.group(), row, display_column(line, match.start()))
-        for expression, kind, action in ((PATH, "path", "open"), (FILE, "path", "open"),
+        for expression, kind, action in ((PATH, "path", None), (FILE, "path", None),
                                          (HASH, "git-hash", "copy"),
                                          (IP, "ip", "copy"), (STAMP, "timestamp", "copy")):
             for match in expression.finditer(line):
                 start = display_column(line, match.start())
+                if expression is FILE and IP.fullmatch(match.group()):
+                    continue
                 if not any(overlaps(t, row, start, cell_width(match.group())) for t in result):
-                    add(kind, match.group(), row, display_column(line, match.start()), action)
+                    value = match.group()
+                    add(kind, value, row, display_column(line, match.start()),
+                        file_action(value) if action is None else action)
         for match in CODEX_RESUME.finditer(line):
             add("codex-resume", match.group(), row, display_column(line, match.start()))
         command = COMMAND.match(line)
