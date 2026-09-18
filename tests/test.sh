@@ -403,6 +403,9 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
     123) echo 'nvim --embed' ;;
     124) echo '/usr/bin/neovim --embed' ;;
     125) echo 'vim' ;;
+    777) echo '-zsh' ;;
+    778) echo '/bin/zsh' ;;
+    779) echo '/bin/bash' ;;
     102) echo '/System/Library/WindowServer' ;;
     *) echo 'node /fake/path/codex' ;;
   esac
@@ -469,6 +472,12 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" 'Second conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" 'First conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" 'Codex'
+directory_root="$test_home/code/work/projects/ikp-digi-wcp-custom-sfra"
+mkdir -p "$directory_root/src/components" "$test_home/code/customer-success-platform-v3.14" "$test_home/code/foo_bar_checkout_service/tests"
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 777 "$directory_root")" 'sfra'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 778 "$directory_root/src/components")" 'sfra'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 779 "$test_home/code/customer-success-platform-v3.14")" 'platform'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 777 "$test_home/code/foo_bar_checkout_service/tests")" 'checkout'
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
 grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
 status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")

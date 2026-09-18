@@ -111,8 +111,12 @@ useful terminal values (commands, errors, Git references, JSON/code blocks,
 timestamps, IPs, or the latest Codex response) are copied. There is no Smart Actions
 popup or separate menu. The detector is local and deterministic.
 
-tmux also names windows from the application running in the active pane. For a
-Codex pane, the managed helper uses that pane's Codex title and displays the
+tmux names windows from the active pane. For an ordinary shell pane, it derives
+a short name from the current directory only: structural, environment, and
+version-like directory components are ignored, and the shortest meaningful
+name is retained. For example, `ikp-digi-wcp-custom-sfra` becomes `sfra`.
+Opening a file does not change a shell window's name. For a Codex pane, the
+managed helper uses that pane's Codex title and displays the
 conversation name, such as
 `codex: Show tmux session names`. Other recognized applications receive stable
 labels; this keeps simultaneous Codex conversations in the same repository

@@ -16,8 +16,67 @@ label_for_command() {
   executable=${command%%[[:space:]]*}
   executable=${executable##*/}
   case "$executable" in
+    -bash|-zsh|-fish|-sh|-dash|-ksh) echo "${executable#-}" ;;
     bash|zsh|fish|sh|dash|ksh) echo "$executable" ;;
     *) echo "$executable" ;;
+  esac
+}
+
+is_ignored_directory_token() {
+  case "$1" in
+    src|app|apps|lib|libs|bin|dist|build|target|coverage|vendor|packages|package|modules|services|components|pages|tests|test|testing|unit|integration|e2e|generated|output|cache|tmp|temp|workspace|work|projects|project|repos|repo|repositories|repository|node_modules|dev|development|test|staging|stage|prod|production|local|sandbox|debug|release|latest|current|api|web|frontend|backend|server|client|service|services|application|v[0-9]*|[0-9]*|[0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f][0-9a-f]*)
+      return 0
+      ;;
+    *) return 1 ;;
+  esac
+}
+
+shorten_directory_label() {
+  local value="$1" limit="${DOTFILES_WINDOW_NAME_MAX:-24}"
+  (( ${#value} <= limit )) && { printf '%s\n' "$value"; return; }
+
+  local head=$(( (limit - 1) / 2 ))
+  local tail=$(( limit - head - 1 ))
+  printf '%s…%s\n' "${value:0:head}" "${value: -tail}"
+}
+
+directory_label() {
+  local path="$1" component token candidate="" index token_index
+  local -a components tokens
+
+  [[ -n "$path" ]] || return 1
+  while [[ "$path" == */ && "$path" != / ]]; do path=${path%/}; done
+  [[ "$path" == "$HOME" ]] && { printf '~\n'; return; }
+  [[ "$path" == / ]] && { printf '/\n'; return; }
+
+  IFS='/' read -r -a components <<<"${path#/}"
+  index=$((${#components[@]} - 1))
+  while (( index >= 0 )); do
+    component=${components[index]}
+    if [[ -n "$component" ]]; then
+      tokens=($(sed -E 's/([a-z0-9])([A-Z])|([A-Z])([A-Z][a-z])/\1\3 \2\4/g; s/[^[:alnum:]]+/ /g' <<<"$component"))
+      token_index=$((${#tokens[@]} - 1))
+      while (( token_index >= 0 )); do
+        token=${tokens[token_index]}
+        if [[ ${#token} -ge 2 ]] && ! is_ignored_directory_token "${token,,}"; then
+          candidate="$token"
+          break
+        fi
+        token_index=$((token_index - 1))
+      done
+    fi
+    [[ -n "$candidate" ]] && break
+    index=$((index - 1))
+  done
+
+  [[ -n "$candidate" ]] || candidate="${components[-1]}"
+  shorten_directory_label "$candidate"
+}
+
+is_shell_label() {
+  case "$1" in
+    bash|zsh|fish|sh|dash|ksh) return 0 ;;
+    *) return 1 ;;
   esac
 }
 
@@ -63,7 +122,17 @@ find_application() {
       fi
       return 0
       ;;
-    *nvim*|*neovim*) echo ""; return 0 ;;
+    *nvim*|*neovim*)
+      # Neovim publishes the active buffer basename through the terminal title.
+      # Keep the icon-only fallback for dashboards, terminals, and unnamed buffers.
+      title=$(sed -E 's/[[:space:]]+$//' <<<"$pane_title")
+      if [[ "$title" == * ]]; then
+        printf '__nvim__%s\n' "$title"
+      else
+        echo '__nvim__'
+      fi
+      return 0
+      ;;
     *vim*) echo "vim"; return 0 ;;
     *lazygit*) echo "lazygit"; return 0 ;;
     *python*|*pyright*) echo "python"; return 0 ;;
@@ -85,6 +154,10 @@ find_application() {
 label=$(find_application "$pane_pid")
 if [[ "$label" == __codex__* ]]; then
   printf '%s\n' "${label#__codex__}" | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]+$//'
+elif [[ "$label" == __nvim__* ]]; then
+  printf '%s\n' "${label#__nvim__}"
+elif is_shell_label "$label" && [[ -n "$pane_path" ]]; then
+  directory_label "$pane_path"
 else
   printf '%s\n' "$label" | tr '[:upper:]' '[:lower:]' | sed -E 's/[[:space:]]+/-/g'
 fi
