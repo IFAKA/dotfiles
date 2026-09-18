@@ -48,7 +48,8 @@ dotfiles install tmux --yes
 The right side also shows Codex's `5h` and `wk` usage windows when the active
 tmux pane is running Codex and Codex is authenticated locally. Values are cached
 between Codex events and recalculated when a Codex window opens, a response
-finishes, or an action is required. The usage helper comes from
+finishes, or an action is required; each tmux window keeps its own cached
+values. The usage helper comes from
 `artischocki/agent-usage-tmux` and stays blank when no usage data is available.
 
 Press `C-Space` then `g` from any tmux pane to open LazyGit in a large popup rooted

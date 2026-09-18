@@ -9,6 +9,8 @@ if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
   pane_pid=$mode
   [[ "$pane_pid" =~ ^[0-9]+$ ]] || exit 0
 fi
+window_id=${2:-default}
+[[ "$window_id" =~ ^@[0-9]+$ ]] && window_id=${window_id#@} || window_id=default
 
 process_command() {
   ps -o command= -p "$1" 2>/dev/null | sed 's/^ *//'
@@ -30,7 +32,8 @@ if [[ "$mode" != --refresh && "$mode" != --trigger ]]; then
   has_codex_process "$pane_pid" || exit 0
 fi
 
-cache_dir="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-usage-${UID}}"
+cache_root="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-usage-${UID}}"
+cache_dir="$cache_root/$window_id"
 cache_file="$cache_dir/usage"
 attempt_file="$cache_dir/last-attempt"
 refresh_lock="$cache_dir/.refresh.lock"
@@ -105,7 +108,7 @@ schedule_refresh() {
   mkdir -p "$cache_dir"
   mkdir "$refresh_lock" 2>/dev/null || return 0
   printf '%s\n' "$now" > "$attempt_file"
-  nohup bash "$0" --refresh >/dev/null 2>&1 &
+  nohup bash "$0" --refresh "@$window_id" >/dev/null 2>&1 &
 }
 
 if [[ "$mode" == --refresh ]]; then

@@ -336,14 +336,23 @@ usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_CODEX_USAGE_C
 first_usage=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger
 for _ in {1..40}; do
-  [[ -f "$usage_cache/usage" ]] && break
+  [[ -f "$usage_cache/default/usage" ]] && break
   sleep 0.05
 done
-assert_file "$usage_cache/usage"
+assert_file "$usage_cache/default/usage"
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 0h01m | wk 80% 0h01m '
 assert_output "$(cat "$usage_calls")" '4'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
+env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger @2
+for _ in {1..40}; do
+  [[ -f "$usage_cache/2/usage" ]] && break
+  sleep 0.05
+done
+assert_file "$usage_cache/2/usage"
+assert_output "$(cat "$usage_calls")" '8'
+env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
+assert_output "$(cat "$usage_calls")" '8'
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102)" ''
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' ● CPU | ● MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
