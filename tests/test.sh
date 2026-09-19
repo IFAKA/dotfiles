@@ -703,7 +703,7 @@ for _ in {1..40}; do
   sleep 0.05
 done
 assert_file "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1m | wk ⣶ 1m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1m · wk ⣶ 1m |'
 colored_usage=$(env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
 ! grep -q 'bg=' <<<"${colored_usage%% |*}" || fail "progress indicator changed its background"
 grep -q 'fg=#' <<<"$colored_usage" || fail "progress indicator color missing"
@@ -711,16 +711,16 @@ grep -q 'fg=colour250,nobold,nodim' <<<"$colored_usage" || fail "reset time is n
 grep -q 'fg=colour255,bold,nodim' <<<"$colored_usage" || fail "reset time style was not restored"
 assert_output "$(cat "$usage_calls")" '4'
 printf '0 80 86400 80 43200\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1d | wk ⣶ 12h |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1d · wk ⣶ 12h |'
 printf '0 80 3600 80 0\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1h | wk ⣶ 0m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1h · wk ⣶ 0m |'
 assert_output "$(cat "$usage_calls")" '4'
 
 usage_indicator() {
   local value="$1"
   printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/usage"
   env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
-    sed -E 's/#\[[^]]*\]//g' | sed -E 's/^ 5h (.) 1m \| wk . 1m \|$/\1/'
+    sed -E 's/#\[[^]]*\]//g' | sed -E 's/^ 5h (.) 1m · wk . 1m \|$/\1/'
 }
 
 expected_indicators=('⠀' '⠀' '⡀' '⣀' '⣤' '⣶' '⣷' '⣷' '⣿' '⣿')
@@ -748,11 +748,11 @@ color_at() {
 printf '0 80 60 80 60\n' > "$usage_cache/usage"
 no_color_output=$(NO_COLOR=1 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
-assert_output "$no_color_output" ' 5h ⣶ 1m | wk ⣶ 1m |'
+assert_output "$no_color_output" ' 5h ⣶ 1m · wk ⣶ 1m |'
 [[ "$no_color_output" != *%* ]] || fail "numeric percentage leaked into indicator"
 fallback_output=$(env "${usage_env[@]}" TERM=dumb NO_COLOR=1 "$repo_root/tmux/codex-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
-assert_output "$fallback_output" ' 5h ⣶ 1m | wk ⣶ 1m |'
+assert_output "$fallback_output" ' 5h ⣶ 1m · wk ⣶ 1m |'
 python3 - "$no_color_output" <<'PY' || fail "progress indicator width"
 import re
 import sys
@@ -773,7 +773,7 @@ assert all(libc.wcwidth(char) == 1 for char in fields), fields
 PY
 printf '0 -- 60 -- 60\n' > "$usage_cache/usage"
 unknown_output=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g')
-assert_output "$unknown_output" ' 5h ? | wk ? |'
+assert_output "$unknown_output" ' 5h ? · wk ? |'
 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
 for _ in {1..40}; do
