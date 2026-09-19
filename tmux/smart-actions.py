@@ -47,7 +47,7 @@ EDITABLE_FILE_EXTENSIONS = frozenset({
     "hs", "html", "ini", "java", "jl", "js", "json", "jsx", "kt", "kts", "less",
     "lua", "php", "pl", "ps1", "py", "rb", "rs", "scss", "sh", "sql", "svelte",
     "swift", "tex", "toml", "ts", "tsx", "txt", "vim", "vue", "xml", "yaml", "yml",
-    "md", "markdown",
+    "log", "md", "markdown",
     "zig", "zsh",
 })
 DETECTABLE_FILE_EXTENSIONS = EDITABLE_FILE_EXTENSIONS | frozenset({

@@ -418,8 +418,9 @@ assert module.smart_action_target("https://example.com", 0, 8).type == "url"
 assert ran == [], ran
 assert copied == ["10.0.0.1"], copied
 
-targets = module.detect("src/main.py image.png recording.mp4 notes.txt")
+targets = module.detect("src/main.py server.log image.png recording.mp4 notes.txt")
 assert next(target for target in targets if target.value == "src/main.py").action == "edit", targets
+assert next(target for target in targets if target.value == "server.log").action == "edit", targets
 assert next(target for target in targets if target.value == "image.png").action == "open", targets
 assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
 assert next(target for target in targets if target.value == "notes.txt").action == "edit", targets
