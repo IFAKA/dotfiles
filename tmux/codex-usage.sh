@@ -31,6 +31,7 @@ cache_root="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-us
 cache_dir="$cache_root"
 cache_file="$cache_dir/usage"
 refresh_lock="$cache_dir/.refresh.lock"
+braille_states=('⣿' '⣷' '⣶' '⣦' '⣤' '⣄' '⣀' '⡀' '⠀')
 
 format_reset() {
   local seconds="$1"
@@ -49,31 +50,54 @@ format_reset() {
 
 remaining_color() {
   local value="$1"
-  # The fetcher returns remaining capacity: 100 means a full window and 0
-  # means exhausted. Keep the color scale aligned with that meaning.
-  if (( value <= 10 )); then
-    printf 'colour217'
-  elif (( value <= 25 )); then
-    printf 'colour223'
-  elif (( value <= 40 )); then
-    printf 'colour226'
-  elif (( value <= 60 )); then
-    printf 'colour186'
-  elif (( value <= 80 )); then
-    printf 'colour150'
-  else
-    printf 'colour114'
+  # Interpolate a luminance-ordered, colour-vision-deficiency-friendly ramp
+  # continuously so color adds resolution between the geometric states.
+  awk -v value="$value" 'BEGIN {
+    if (value < 0) value = 0
+    if (value > 100) value = 100
+    split("239,68,68 245,158,11 250,204,21 163,230,53 103,232,249", stops, " ")
+    position = value / 25
+    segment = int(position)
+    if (segment >= 4) segment = 3
+    fraction = position - segment
+    split(stops[segment + 1], start, ",")
+    split(stops[segment + 2], finish, ",")
+    red = int(start[1] + (finish[1] - start[1]) * fraction + 0.5)
+    green = int(start[2] + (finish[2] - start[2]) * fraction + 0.5)
+    blue = int(start[3] + (finish[3] - start[3]) * fraction + 0.5)
+    printf "#%02x%02x%02x", red, green, blue
+  }'
+}
+
+remaining_block() {
+  local value="$1" index
+  index=$(awk -v value="$value" 'BEGIN {
+    if (value < 0) value = 0
+    if (value > 100) value = 100
+    printf "%d", int(value * 8 / 100 + 0.5)
+  }')
+  printf '%s' "${braille_states[8 - index]}"
+}
+
+remaining_indicator() {
+  local value="$1" block color
+  block=$(remaining_block "$value")
+  if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == dumb ]]; then
+    printf '%s' "$block"
+    return
   fi
+  color=$(remaining_color "$value")
+  # Preserve the caller's background; the indicator itself has no background.
+  printf '#[fg=%s,bold]%s#[fg=colour255,bold]' "$color" "$block"
 }
 
 usage_value() {
   local percent="$1" reset="$2"
   if [[ "$percent" == -- ]]; then
-    printf '#[fg=colour255,bold]--%%#[fg=colour255] --'
+    printf '?'
     return
   fi
-  printf '#[fg=%s,bold]%s%%#[fg=colour255,bold] %s' \
-    "$(remaining_color "$percent")" "$percent" "$(format_reset "$reset")"
+  printf '%s %s' "$(remaining_indicator "$percent")" "$(format_reset "$reset")"
 }
 
 refresh_usage() {
@@ -82,8 +106,8 @@ refresh_usage() {
   primary_reset=$(python3 "$fetch_script" --window primary --field reset_in 2>/dev/null) || return 1
   secondary_percent=$(python3 "$fetch_script" --window secondary 2>/dev/null) || return 1
   secondary_reset=$(python3 "$fetch_script" --window secondary --field reset_in 2>/dev/null) || return 1
-  [[ "$primary_percent" =~ ^[0-9]+$ && "$primary_reset" =~ ^[0-9]+$ &&
-    "$secondary_percent" =~ ^[0-9]+$ && "$secondary_reset" =~ ^[0-9]+$ ]] || return 1
+  [[ "$primary_percent" =~ ^[0-9]+([.][0-9]+)?$ && "$primary_reset" =~ ^[0-9]+$ &&
+    "$secondary_percent" =~ ^[0-9]+([.][0-9]+)?$ && "$secondary_reset" =~ ^[0-9]+$ ]] || return 1
   temporary=$(mktemp "$cache_dir/.usage.XXXXXX")
   printf '%s %s %s %s %s\n' "$(date +%s)" "$primary_percent" "$primary_reset" \
     "$secondary_percent" "$secondary_reset" > "$temporary"
@@ -114,8 +138,8 @@ secondary_percent=--
 secondary_reset=0
 if [[ -f "$cache_file" ]]; then
   read -r fetched_at primary_percent primary_reset secondary_percent secondary_reset < "$cache_file" || true
-  [[ "$fetched_at" =~ ^[0-9]+$ && "$primary_percent" =~ ^[0-9]+$ &&
-    "$primary_reset" =~ ^[0-9]+$ && "$secondary_percent" =~ ^[0-9]+$ &&
+  [[ "$fetched_at" =~ ^[0-9]+$ && "$primary_percent" =~ ^[0-9]+([.][0-9]+)?$ &&
+    "$primary_reset" =~ ^[0-9]+$ && "$secondary_percent" =~ ^[0-9]+([.][0-9]+)?$ &&
     "$secondary_reset" =~ ^[0-9]+$ ]] || {
     fetched_at=0
     primary_percent=--
