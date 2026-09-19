@@ -148,6 +148,7 @@ bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper sy
 grep -q 'tmux send-keys -X select-word' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select native word selection missing"
 ! grep -Eq 'apply_span|semantic-select|semantic-sibling|goto-line|smart-select-' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select added a competing selection state"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
+bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 grep -q "@smart-actions-highlight-style 'fg=#f8fafc,bg=#115e59,bold'" "$repo_root/tmux/tmux.conf" || fail "Smart Actions teal highlight style missing"
 grep -q 'dotfiles-smart-actions-render-v9' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer patch marker missing"
 grep -q 'dotfiles-smart-actions-render-v\[1-9\]' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer upgrade marker missing"
@@ -425,6 +426,9 @@ assert next(target for target in targets if target.value == "image.png").action 
 assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
 assert next(target for target in targets if target.value == "notes.txt").action == "edit", targets
 assert next(target for target in module.detect("README.md") if target.value == "README.md").action == "edit"
+apk = next(target for target in module.detect("APK: artifacts/walkback-debug.apk") if target.value == "artifacts/walkback-debug.apk")
+assert apk.action == "open", apk
+assert module.open_command(apk, None) == ["open", "-R", "artifacts/walkback-debug.apk"], module.open_command(apk, None)
 PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course|dw' <<<"$help" || fail "help output"
@@ -567,7 +571,7 @@ grep -q "^bind -T copy-mode-vi k send-keys -X cursor-up$" "$XDG_CONFIG_HOME/tmux
 ! grep -q "^bind -T copy-mode-vi S " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "standalone S binding must not overlap Smart Select"
 ! grep -q "^bind -T copy-mode-vi \(Up\|Down\) " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "arrow bindings must not overlap Smart Select"
 grep -q "^bind -T copy-mode-vi V send-keys -X select-line$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "line selection binding missing"
-grep -Fq "bind v copy-mode \\; run-shell -b 'bash \"\${XDG_CONFIG_HOME:-\$HOME/.config}/tmux/easy-motion-default.sh\" smart'" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix v Smart Select binding missing"
+grep -Fq "bind v copy-mode \\; run-shell -b 'bash \"\${XDG_CONFIG_HOME:-\$HOME/.config}/tmux/easy-motion-default.sh\" smart \"#{pane_id}\"'" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix v Smart Select binding missing"
 grep -Fq "bind a copy-mode \\; run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "prefix a EasyMotion alias missing"
 grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux-easy-motion plugin missing"
 grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"
@@ -605,6 +609,11 @@ FAKE_TMUX_SELECTION_START_X=0 EASY_MOTION_ARGS_FILE="$test_home/easy-motion-end.
   TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
   bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 grep -q ' pane-id bd-E$' "$test_home/easy-motion-end.args" || fail "EasyMotion END motion is not bd-E"
+EASY_MOTION_ARGS_FILE="$test_home/easy-motion-explicit-pane.args" \
+  TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
+  TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
+  bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" smart explicit-pane
+grep -q ' explicit-pane bd-w$' "$test_home/easy-motion-explicit-pane.args" || fail "EasyMotion explicit pane binding is not bd-w"
 "$repo_root/install" install tmux --yes
 
 git_repo=$(mktemp -d "$test_home/git-repo.XXXXXX")

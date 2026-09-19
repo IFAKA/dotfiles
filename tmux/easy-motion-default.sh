@@ -5,15 +5,22 @@ plugin_root="${TMUX_PLUGIN_MANAGER_PATH:-${XDG_CONFIG_HOME:-$HOME/.config}/tmux/
 plugin_dir="${plugin_root%/}/tmux-easy-motion"
 semantic_action="${XDG_CONFIG_HOME:-$HOME/.config}/tmux/smart-actions.py"
 mode="${1:-action}"
+requested_pane_id="${2:-}"
 
 [[ -x "$plugin_dir/scripts/easy_motion.sh" ]] || exit 0
 [[ -f "$semantic_action" ]] || exit 0
 [[ "${TMUX:-}" =~ .*,([^,]+),.* ]] || exit 0
 
 server_pid="${BASH_REMATCH[1]}"
-session_id=$(tmux display-message -p '#{session_id}')
-window_id=$(tmux display-message -p '#{window_id}')
-pane_id=$(tmux display-message -p '#{pane_id}')
+if [[ -n "$requested_pane_id" ]]; then
+  pane_id="$requested_pane_id"
+  session_id=$(tmux display-message -p -t "$pane_id" '#{session_id}')
+  window_id=$(tmux display-message -p -t "$pane_id" '#{window_id}')
+else
+  session_id=$(tmux display-message -p '#{session_id}')
+  window_id=$(tmux display-message -p '#{window_id}')
+  pane_id=$(tmux display-message -p '#{pane_id}')
+fi
 
 target_keys=$(tmux show-options -gqv @easy-motion-target-keys 2>/dev/null || true)
 target_keys=${target_keys:-asdfghjklqwertyuiopzxcvbnm}

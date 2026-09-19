@@ -53,7 +53,7 @@ EDITABLE_FILE_EXTENSIONS = frozenset({
 DETECTABLE_FILE_EXTENSIONS = EDITABLE_FILE_EXTENSIONS | frozenset({
     "bmp", "csv", "gif", "jpeg", "jpg", "log", "md", "markdown", "mov", "mp3",
     "mp4", "pdf", "png", "svg", "tif", "tiff", "tsv", "txt", "webm", "webp", "xlsx",
-    "xls", "zip",
+    "xls", "zip", "apk",
 })
 
 
@@ -306,7 +306,12 @@ def open_command(target: Target, pane_id: str | None = None) -> list[str] | None
         return [("open" if sys.platform == "darwin" else "xdg-open"), value]
     if target.type in {"path", "location"}:
         path, _, _ = parse_location(target.value)
-        return [("open" if sys.platform == "darwin" else "xdg-open"), os.path.expanduser(path)]
+        path = os.path.expanduser(path)
+        if path.lower().endswith(".apk"):
+            if sys.platform == "darwin":
+                return ["open", "-R", path]
+            path = os.path.dirname(path) or "."
+        return [("open" if sys.platform == "darwin" else "xdg-open"), path]
     return None
 
 
