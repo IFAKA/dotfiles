@@ -572,6 +572,11 @@ grep -q "^set -g @plugin 'IngoMeyer441/tmux-easy-motion'$" "$XDG_CONFIG_HOME/tmu
 grep -q "^set -g @easy-motion-copy-mode-prefix 'M-Space'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "advanced EasyMotion binding missing"
 grep -q '^set -g @easy-motion-auto-begin-selection "true"$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion auto-selection missing"
 grep -q "^set -g @easy-motion-binding-bd-w 'm'$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "bidirectional word motion missing"
+grep -q 'EasyMotion .*OPEN.*EDIT.*COPY' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion status legend missing"
+grep -q 'bg=#115e59.*OPEN' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion OPEN status background missing"
+grep -q 'bg=#1e3a8a.*EDIT' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion EDIT status background missing"
+grep -q 'bg=#854d0e.*COPY' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion COPY status background missing"
+! grep -q 'EasyMotion.*\[easy-motion\]' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "legacy EasyMotion status label is still rendered"
 
 fake_tmux_bin=$(mktemp -d "$test_home/fake-tmux-bin.XXXXXX")
 fake_plugin_dir="$XDG_CONFIG_HOME/tmux/plugins/tmux-easy-motion/scripts"
