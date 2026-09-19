@@ -145,7 +145,168 @@ dw_online_output=$(TMUX_DW_STATUS_CACHE_DIR="$online_cache" "$repo_root/tmux/dw-
 grep -q ' version_test 018 ' <<<"$dw_online_output" || fail "DW online status did not expose the code version"
 grep -q 'fg=colour255,bg=#166534,bold' <<<"$dw_online_output" || fail "DW online status is not dark green"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
+grep -q 'tmux send-keys -X select-word' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select native word selection missing"
+! grep -Eq 'apply_span|semantic-select|semantic-sibling|goto-line|smart-select-' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select added a competing selection state"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
+grep -q "@smart-actions-highlight-style 'fg=#f8fafc,bg=#115e59,bold'" "$repo_root/tmux/tmux.conf" || fail "Smart Actions teal highlight style missing"
+grep -q 'dotfiles-smart-actions-render-v7' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer patch marker missing"
+grep -q 'dotfiles-smart-actions-render-v\[1-7\]' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer upgrade marker missing"
+grep -q '_styled_capture_slice' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion action-aware renderer missing"
+grep -q 'smart_action_disabled_styles, smart_action_background_styles, smart_action_ranges' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion disabled-style renderer call missing"
+grep -q '_action_style_at' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion action label styling missing"
+grep -q '_smart_action_background_style' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion label background styling missing"
+grep -q '@smart-actions-open-background-style' "$repo_root/tmux/tmux.conf" || fail "open action background style missing"
+grep -q '@smart-actions-edit-background-style' "$repo_root/tmux/tmux.conf" || fail "edit action background style missing"
+grep -q '@smart-actions-copy-background-style' "$repo_root/tmux/tmux.conf" || fail "copy action background style missing"
+renderer_fixture="$test_home/easy-motion-fixture"
+mkdir -p "$renderer_fixture/scripts"
+cat > "$renderer_fixture/scripts/easy_motion.sh" <<'SH'
+#!/usr/bin/env bash
+        read -r jump_command && \
+        [[ "$(awk '{ print $1 }' <<< "${jump_command}")" == "jump" ]] || return
+SH
+cat > "$renderer_fixture/scripts/easy_motion.py" <<'PY'
+import io
+import re
+import subprocess
+import sys
+import termios
+import time
+
+class TerminalCodes:
+    class Style:
+        RESET = "RESET"
+        @staticmethod
+        def parse_style(style):
+            return style
+
+class JumpTarget:
+    DIRECT = 0
+    GROUP = 1
+    PREVIEW = 2
+
+def generate_jump_targets(grouped_indices, target_keys):
+    for index, key in zip(grouped_indices, target_keys):
+        yield (JumpTarget.DIRECT, index, key)
+
+def print_text(capture_buffer):
+    pass
+
+def handle_user_input(command_pipe, next_key):
+    while True:
+                if next_key == "esc":
+                    break
+
+def print_text_with_targets(capture_buffer, grouped_indices, dim_style_code, highlight_style_code, highlight_2_first_style_code, highlight_2_second_style_code, target_keys, terminal_width):
+    # type: (str, Iterable[Any], str, str, str, str, str, int) -> None
+    target_type_to_color = {
+        JumpTarget.DIRECT: highlight_style_code,
+        JumpTarget.GROUP: highlight_2_first_style_code,
+        JumpTarget.PREVIEW: highlight_2_second_style_code,
+    }
+    jump_targets = sorted(generate_jump_targets(grouped_indices, target_keys), key=lambda x: (x[1], x[0]))
+    out_buffer_parts = []
+    previous_text_pos = -1
+    for target_type, text_pos, target_key in jump_targets:
+        if text_pos > previous_text_pos + 1:
+            out_buffer_parts.extend([dim_style_code, capture_buffer[previous_text_pos + 1 : text_pos], TerminalCodes.Style.RESET])
+        if text_pos > previous_text_pos:
+            out_buffer_parts.extend([target_type_to_color[target_type], target_key, TerminalCodes.Style.RESET])
+        previous_text_pos = text_pos
+    rest_of_capture_buffer = capture_buffer[previous_text_pos + 1 :].rstrip()
+    if rest_of_capture_buffer:
+        out_buffer_parts.extend([dim_style_code, rest_of_capture_buffer, TerminalCodes.Style.RESET])
+    sys.stdout.write("".join(out_buffer_parts))
+PY
+bash "$repo_root/tmux/patch-easy-motion.sh" "$renderer_fixture" || fail "clean EasyMotion renderer patch failed"
+python3 -m py_compile "$renderer_fixture/scripts/easy_motion.py" || fail "patched EasyMotion renderer syntax"
+grep -q 'dotfiles-easy-motion-cancel-v2' "$renderer_fixture/scripts/easy_motion.sh" || fail "EasyMotion shell cancellation patch missing"
+grep -q 'send-keys -t "\${EASY_MOTION_ORIGINAL_PANE_ID}" -X cancel' "$renderer_fixture/scripts/easy_motion.sh" || fail "EasyMotion cancel does not leave copy mode"
+grep -q 'print("cancel", file=command_pipe)' "$renderer_fixture/scripts/easy_motion.py" || fail "EasyMotion renderer cancellation patch missing"
+! grep -q '_smart_action_background_style()' "$renderer_fixture/scripts/easy_motion.py" || fail "stale EasyMotion background helper call remains"
+cp "$renderer_fixture/scripts/easy_motion.py" "$renderer_fixture/patched.py"
+for renderer_version in v1 v2 v3; do
+  variant="$test_home/easy-motion-$renderer_version"
+  cp -R "$renderer_fixture" "$variant"
+  python3 - "$variant/scripts/easy_motion.py" "$renderer_version" <<'PY'
+import pathlib
+import sys
+path = pathlib.Path(sys.argv[1])
+version = sys.argv[2]
+source = path.read_text().replace("dotfiles-smart-actions-render-v7", "dotfiles-smart-actions-render-" + version, 1)
+if version == "v3":
+    source = source.replace("smart_action_background_style, smart_action_ranges", "smart_action_style, smart_action_ranges", 1)
+path.write_text(source)
+PY
+  bash "$repo_root/tmux/patch-easy-motion.sh" "$variant" || fail "$renderer_version EasyMotion renderer upgrade failed"
+  python3 -m py_compile "$variant/scripts/easy_motion.py" || fail "$renderer_version EasyMotion renderer syntax"
+  grep -q 'dotfiles-smart-actions-render-v7' "$variant/scripts/easy_motion.py" || fail "$renderer_version EasyMotion renderer was not upgraded"
+  before=$(cksum < "$variant/scripts/easy_motion.py")
+  bash "$repo_root/tmux/patch-easy-motion.sh" "$variant"
+  after=$(cksum < "$variant/scripts/easy_motion.py")
+  [[ "$before" == "$after" ]] || fail "$renderer_version repeated patch changed the renderer"
+done
+python3 - "$renderer_fixture/scripts/easy_motion.py" <<'PY' || fail "EasyMotion renderer style mapping"
+import contextlib
+import importlib.util
+import io
+import sys
+
+spec = importlib.util.spec_from_file_location("easy_motion_renderer", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+sys.modules[spec.name] = module
+spec.loader.exec_module(module)
+module._smart_action_ranges = lambda text: [
+    {"row": 0, "start_column": 5, "end_column": 9, "action": "edit"},
+    {"row": 1, "start_column": 4, "end_column": 9, "action": "open"},
+]
+module._smart_action_style = lambda: "fg=#f8fafc,bg=#115e59,bold"
+module._smart_action_background_styles = lambda: {
+    "default": "bg=#115e59",
+    "open": "bg=#115e59",
+    "edit": "bg=#1e3a8a",
+    "copy": "bg=#854d0e",
+}
+module._smart_action_disabled_styles = lambda: {
+    "default": "fg=#f8fafc",
+    "open": "fg=#f8fafc",
+    "edit": "fg=#f8fafc",
+    "copy": "fg=#000000",
+}
+text = "x https://example.com\n日本語 file.py"
+output = io.StringIO()
+with contextlib.redirect_stdout(output):
+    module.print_text_with_targets(text, [0, 5], "DIM", "fg=colour196,bold", "GROUP", "PREVIEW", ["x", "y"], 80)
+rendered = output.getvalue()
+assert "fg=colour196,boldxRESET" in rendered, rendered
+assert "fg=colour196,boldbg=#1e3a8ayRESET" in rendered, rendered
+assert "fg=#f8fafcDIMbg=#1e3a8a" in rendered, rendered
+assert "fg=#f8fafcDIMbg=#115e59" in rendered, rendered
+action_blocks = module._styled_capture_slice(
+    "open edit copy", 0, len("open edit copy"), "DIM",
+    {"open": "fg=#f8fafc", "edit": "fg=#f8fafc", "copy": "fg=#000000"},
+    {"open": "bg=#115e59", "edit": "bg=#1e3a8a", "copy": "bg=#854d0e"},
+    [
+        {"row": 0, "start_column": 0, "end_column": 3, "action": "open"},
+        {"row": 0, "start_column": 5, "end_column": 8, "action": "edit"},
+        {"row": 0, "start_column": 10, "end_column": 13, "action": "copy"},
+    ],
+)
+assert "fg=#f8fafcDIMbg=#115e59open" in action_blocks, action_blocks
+assert "fg=#f8fafcDIMbg=#1e3a8aedit" in action_blocks, action_blocks
+assert "fg=#000000DIMbg=#854d0ecopy" in action_blocks, action_blocks
+assert module._hex_rgb("#abc") == (170, 187, 204)
+assert module._hex_rgb("colour24") is None
+assert module._contrast_ratio((10, 20, 30), (248, 250, 252)) > module._contrast_ratio((10, 20, 30), (0, 0, 0))
+assert module._contrast_ratio((245, 245, 245), (0, 0, 0)) > module._contrast_ratio((245, 245, 245), (248, 250, 252))
+wide_multiline = module._styled_capture_slice(
+    "😀 x\n日本語 y", 0, len("😀 x\n日本語 y"), "DIM", {"default": "ACTION"}, {"default": "BACKGROUND"}, [
+        {"row": 0, "start_column": 3, "end_column": 3},
+        {"row": 1, "start_column": 7, "end_column": 7},
+    ]
+)
+assert wide_multiline.count("ACTION") == 2, wide_multiline
+PY
 python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions detector matrix"
 import importlib.util
 import os
@@ -189,6 +350,10 @@ code = next(target for target in targets if target.type == "code")
 assert module.target_contains(command, command.row, command.column + len(command.text) - 1)
 assert module.target_contains(code, 8, 3)
 assert module.smart_action(sample, 99, 99, None) == 0
+spans = module.action_spans("😀 https://example.com\n日本語 src/main.py:42:8")
+assert next(span for span in spans if span["type"] == "url")["start_column"] == 3
+location_span = next(span for span in spans if span["type"] == "location")
+assert (location_span["row"], location_span["start_column"], location_span["action"]) == (1, 7, "edit")
 PY
 python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions adversarial cases"
 import importlib.util
@@ -259,34 +424,6 @@ assert next(target for target in targets if target.value == "image.png").action 
 assert next(target for target in targets if target.value == "recording.mp4").action == "open", targets
 assert next(target for target in targets if target.value == "notes.txt").action == "edit", targets
 assert next(target for target in module.detect("README.md") if target.value == "README.md").action == "edit"
-PY
-python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart selection matrix"
-import importlib.util
-import sys
-
-spec = importlib.util.spec_from_file_location("smart_selection", sys.argv[1])
-module = importlib.util.module_from_spec(spec)
-sys.modules[spec.name] = module
-spec.loader.exec_module(module)
-
-assert module.semantic_select("first second", 0, 0).text == "first"
-assert module.semantic_select("😀 wide", 0, 3).column == 3
-assert module.semantic_select("import os.path", 0, 8, 3).text == "import os.path"
-assert module.semantic_select("a paragraph\ncontinues here\n\nnext", 1, 3, 2).text == "a paragraph\ncontinues here"
-assert module.semantic_select("- one\n- two\n\nend", 1, 2, 2).kind == "list-item"
-assert module.semantic_select("- one\n- two\n\nend", 1, 2, 3).text == "- one\n- two"
-assert module.semantic_select("> quote\n> block", 1, 2, 2).text == "> quote\n> block"
-code = "```python\ndef hello():\n    return 1\n```"
-assert module.semantic_select(code, 1, 5, 2).kind == "function"
-assert module.semantic_select("value = important_name", 0, 18).text == "important_name"
-assert module.detect("$ echo hello")[0].value == "echo hello"
-assert not any(target.type == "command" for target in module.detect("```\n$ echo no\n```"))
-resume = module.detect("$ codex resume 01a0b088-587b-7383-b2dd-bf18fc0eb11b")
-assert next(target for target in resume if target.type == "codex-resume")
-assert len([target for target in module.detect("https://example.com https://example.com") if target.type == "url"]) == 2
-assert module.semantic_sibling("- one\n- two", 0, 2, 1, 2).text == "two"
-assert module.semantic_sibling("one\n\ntwo\n\nthree", 0, 0, -1, 2) is None
-assert module.semantic_sibling("one\n\ntwo\n\nthree", 2, 0, 1, 2).text == "three"
 PY
 help=$("$repo_root/install" --help)
 grep -q 'zsh|tmux|btop|nvim|mpv|course|dw' <<<"$help" || fail "help output"
@@ -423,9 +560,9 @@ grep -q '^set -g prefix C-Space$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmu
 grep -q '^unbind C-b$' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "legacy tmux prefix was not unbound"
 grep -q "^set -g mode-keys vi$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux vi mode missing"
 grep -q "^bind -T copy-mode-vi Space run-shell" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion Space binding missing"
-grep -q "^bind -T copy-mode-vi Escape run-shell.*smart-select-active.*cancel" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select cancellation binding missing"
-grep -q "^bind -T copy-mode-vi j run-shell.*easy-motion-default.sh.*move-down" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select down binding missing"
-grep -q "^bind -T copy-mode-vi k run-shell.*easy-motion-default.sh.*move-up" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "Smart Select up binding missing"
+grep -q "^bind -T copy-mode-vi Escape send-keys -X cancel$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "copy-mode cancellation binding missing"
+grep -q "^bind -T copy-mode-vi j send-keys -X cursor-down$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "native copy-mode down binding missing"
+grep -q "^bind -T copy-mode-vi k send-keys -X cursor-up$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "native copy-mode up binding missing"
 ! grep -q "^bind -T copy-mode-vi S " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "standalone S binding must not overlap Smart Select"
 ! grep -q "^bind -T copy-mode-vi \(Up\|Down\) " "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "arrow bindings must not overlap Smart Select"
 grep -q "^bind -T copy-mode-vi V send-keys -X select-line$" "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "line selection binding missing"

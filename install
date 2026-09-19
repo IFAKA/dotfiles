@@ -21,7 +21,7 @@ zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
 dw_marker="$HOME/.local/bin/.dotfiles-dw-managed"
-tmux_files=(tmux.conf resource-status.sh git-status.sh dw-status.sh vercel-status.sh vercel-deploy-common.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py)
+tmux_files=(tmux.conf resource-status.sh git-status.sh dw-status.sh vercel-status.sh vercel-deploy-common.sh program-name.sh codex-status.sh codex-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py patch-easy-motion.sh)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
 
@@ -259,7 +259,8 @@ install_tmux_plugins() {
     git clone --depth 1 https://github.com/artischocki/agent-usage-tmux.git "$agent_usage_dir"
   fi
   [[ -x "$agent_usage_dir/scripts/agent_usage.sh" ]] || die "agent-usage-tmux installation failed"
-  echo "  tmux plugins installed (TPM, tmux-easy-motion, agent-usage-tmux)"
+  "$config_root/tmux/patch-easy-motion.sh" "$easy_motion_dir"
+  echo "  tmux plugins installed (TPM, tmux-easy-motion, agent-usage-tmux; Smart Actions renderer integrated)"
 }
 
 git_hooks_dir() {

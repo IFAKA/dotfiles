@@ -12,7 +12,7 @@ import shutil
 import subprocess
 import sys
 import unicodedata
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 
 
 @dataclass(frozen=True)
@@ -25,30 +25,6 @@ class Target:
     action: str
     end_row: int = 0
     end_column: int = 0
-
-
-@dataclass(frozen=True)
-class SemanticSpan:
-    kind: str
-    start_row: int
-    start_column: int
-    end_row: int
-    end_column: int
-    text: str
-    expansion_level: int
-    siblings: tuple["SemanticSpan", ...] = field(default_factory=tuple, repr=False, compare=False)
-
-    @property
-    def row(self) -> int:
-        return self.start_row
-
-    @property
-    def column(self) -> int:
-        return self.start_column
-
-    @property
-    def value(self) -> str:
-        return self.text
 
 
 URL = re.compile(r"(?<![\w@])(?:https?://|ftp://|www\.)[^\s<>\"']+")
@@ -129,21 +105,6 @@ def target_contains(target: Target, row: int, column: int) -> bool:
     return True
 
 
-def _span_contains(span: SemanticSpan, row: int, column: int) -> bool:
-    if row < span.start_row or row > span.end_row:
-        return False
-    if row == span.start_row and column < span.start_column:
-        return False
-    if row == span.end_row and column > span.end_column:
-        return False
-    return True
-
-
-def _line_span(lines: list[str], start: int, end: int, kind: str, level: int) -> SemanticSpan:
-    return SemanticSpan(kind, start, 0, end, max(0, cell_width(lines[end]) - 1),
-                        "\n".join(lines[start:end + 1]), level)
-
-
 def _fenced_ranges(lines: list[str]) -> list[tuple[int, int]]:
     ranges = []
     index = 0
@@ -155,140 +116,6 @@ def _fenced_ranges(lines: list[str]) -> list[tuple[int, int]]:
                 index = end
         index += 1
     return ranges
-
-
-def _semantic_spans(text: str) -> list[SemanticSpan]:
-    lines = text.splitlines()
-    spans: list[SemanticSpan] = []
-    if not lines:
-        return spans
-
-    # Level 0 deliberately chooses a complete word, including when the cursor
-    # is on its first display cell. Punctuation-aware tokens are the next step.
-    for row, line in enumerate(lines):
-        for match in re.finditer(r"[\w]+", line, re.UNICODE):
-            spans.append(SemanticSpan("word", row, display_column(line, match.start()), row,
-                                      display_column(line, match.end()) - 1, match.group(), 0))
-        for match in re.finditer(r"[^\s]+", line, re.UNICODE):
-            value = match.group()
-            if re.fullmatch(r"[\w]+", value):
-                continue
-            spans.append(SemanticSpan("token", row, display_column(line, match.start()), row,
-                                      display_column(line, match.end()) - 1, value, 1))
-
-    fenced = _fenced_ranges(lines)
-    fenced_rows = {row for start, end in fenced for row in range(start, end + 1)}
-
-    # Imports and shell commands are intentionally complete-line units.
-    for row, line in enumerate(lines):
-        if re.match(r"^\s*(?:import\b|from\s+\S+\s+import\b|(?:[$❯➜]|[\w.-]+@[\w.-]+:.*\$)\s+)", line):
-            spans.append(_line_span(lines, row, row, "line", 2))
-
-    # Expressions/identifiers use the containing assignment/call-like fragment.
-    for row, line in enumerate(lines):
-        for match in re.finditer(r"\b[A-Za-z_][\w]*(?:\.[A-Za-z_][\w]*)*(?:\s*(?:=|\+=|-=|\*=|\+|-|\*|/|\()\s*[^\n]+)?", line):
-            value = match.group().rstrip()
-            if value:
-                spans.append(SemanticSpan("token", row, display_column(line, match.start()), row,
-                                          display_column(line, match.start() + len(value)) - 1, value, 1))
-
-    # Blank-line-separated paragraphs, excluding structural Markdown blocks.
-    row = 0
-    while row < len(lines):
-        if not lines[row].strip() or row in fenced_rows or re.match(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s?)", lines[row]):
-            row += 1
-            continue
-        end = row
-        while end + 1 < len(lines) and lines[end + 1].strip() and (end + 1) not in fenced_rows \
-                and not re.match(r"^\s*(?:[-*+]\s+|\d+[.)]\s+|>\s?)", lines[end + 1]):
-            end += 1
-        spans.append(_line_span(lines, row, end, "paragraph", 5))
-        row = end + 1
-
-    # Markdown list items and contiguous lists.
-    list_rows = []
-    for row, line in enumerate(lines):
-        if re.match(r"^\s*(?:[-*+]\s+|\d+[.)]\s+)", line):
-            list_rows.append(row)
-            match = re.match(r"^(\s*(?:[-*+]\s+|\d+[.)]\s+))(.*)$", line)
-            if match:
-                spans.append(SemanticSpan("list-item", row, display_column(line, len(match.group(1))), row,
-                                          display_column(line, len(line)) - 1, match.group(2), 4))
-    if list_rows:
-        groups = []
-        start = previous = list_rows[0]
-        for current in list_rows[1:]:
-            if current != previous + 1:
-                groups.append((start, previous))
-                start = current
-            previous = current
-        groups.append((start, previous))
-        for start, end in groups:
-            spans.append(_line_span(lines, start, end, "list", 5))
-
-    quote_rows = [row for row, line in enumerate(lines) if re.match(r"^\s*>\s?", line)]
-    if quote_rows:
-        start = previous = quote_rows[0]
-        for current in quote_rows[1:] + [None]:
-            if current is None or current != previous + 1:
-                spans.append(_line_span(lines, start, previous, "blockquote", 6))
-                if current is not None:
-                    start = current
-            if current is not None:
-                previous = current
-
-    for start, end in fenced:
-        if end > start + 1:
-            spans.append(_line_span(lines, start, end, "code-block", 7))
-
-    # Conservative function regions: a recognizable declaration through its
-    # indented/braced body. If no body is unambiguous, no function span is made.
-    declaration = re.compile(
-        r"^\s*(?:(?:def|class)\s+\w+.*:|(?:function|fn|func)\s+\w+|"
-        r"(?:async\s+)?(?:export\s+)?(?:const|let|var)\s+\w+\s*=\s*(?:async\s*)?\([^)]*\)\s*=>|"
-        r"(?:public\s+|private\s+|static\s+)*(?:[\w<>]+\s+)?\w+\s*\([^;]*\)\s*\{)"
-    )
-    for start, line in enumerate(lines):
-        if not declaration.match(line):
-            continue
-        end = start
-        if "{" in line:
-            depth = line.count("{") - line.count("}")
-            while depth > 0 and end + 1 < len(lines):
-                end += 1
-                depth += lines[end].count("{") - lines[end].count("}")
-        else:
-            indent = len(line) - len(line.lstrip())
-            while end + 1 < len(lines):
-                next_indent = len(lines[end + 1]) - len(lines[end + 1].lstrip())
-                if lines[end + 1].strip() and next_indent <= indent:
-                    break
-                end += 1
-        if end > start:
-            spans.append(_line_span(lines, start, end, "function", 3))
-
-    unique: dict[tuple[str, int, int, int, int, str], SemanticSpan] = {}
-    for span in spans:
-        key = (span.kind, span.start_row, span.start_column, span.end_row, span.end_column, span.text)
-        if key not in unique or span.expansion_level < unique[key].expansion_level:
-            unique[key] = span
-    return list(unique.values())
-
-
-def semantic_select(text: str, row: int, column: int, expansion_level: int = 0) -> SemanticSpan | None:
-    spans = [span for span in _semantic_spans(text) if _span_contains(span, row, column)]
-    if not spans:
-        return None
-    ordered = sorted(spans, key=lambda span: (span.expansion_level,
-                                               span.end_row - span.start_row,
-                                               span.end_column - span.start_column))
-    selected_index = min(expansion_level, len(ordered) - 1)
-    selected = ordered[selected_index]
-    peers = [span for span in _semantic_spans(text) if span.kind == selected.kind]
-    selected = SemanticSpan(selected.kind, selected.start_row, selected.start_column,
-                            selected.end_row, selected.end_column, selected.text,
-                            selected_index, tuple(peers))
-    return selected
 
 
 def overlaps(target: Target, row: int, column: int, length: int) -> bool:
@@ -395,6 +222,29 @@ def detect(text: str) -> list[Target]:
                 "command": 6, "codex-response": 7, "git-ref": 8, "git-hash": 9,
                 "json": 10, "code": 11, "ip": 12, "timestamp": 13}
     return sorted(result, key=lambda item: (priority.get(item.type, 99), -item.row, item.column))
+
+
+def action_spans(text: str) -> list[dict[str, int | str]]:
+    """Return display-cell ranges suitable for terminal renderers."""
+    lines = text.splitlines()
+    spans: list[dict[str, int | str]] = []
+    for target in detect(text):
+        last_row = target.end_row if target.end_row else target.row
+        for row in range(target.row, last_row + 1):
+            if row >= len(lines):
+                break
+            start = target.column if row == target.row else 0
+            end = target.end_column if row == last_row and target.end_column else cell_width(lines[row]) - 1
+            if end < start:
+                continue
+            spans.append({
+                "row": row,
+                "start_column": start,
+                "end_column": end,
+                "action": target.action,
+                "type": target.type,
+            })
+    return spans
 
 
 def parse_location(value: str) -> tuple[str, int | None, int | None]:
@@ -533,41 +383,20 @@ def smart_action(text: str, row: int, column: int, pane_id: str | None) -> int:
     return 0
 
 
-def semantic_selection(text: str, row: int, column: int, expansion_level: int = 0) -> SemanticSpan | None:
-    """Public alias used by the tmux wrapper and pure selection tests."""
-    return semantic_select(text, row, column, expansion_level)
-
-
-def semantic_sibling(text: str, row: int, column: int, direction: int, expansion_level: int = 0) -> SemanticSpan | None:
-    """Return the adjacent peer at the current semantic level."""
-    current = semantic_select(text, row, column, expansion_level)
-    if current is None:
-        return None
-    peers = sorted(current.siblings, key=lambda span: (span.start_row, span.start_column))
-    index = next((i for i, span in enumerate(peers)
-                  if span.start_row == current.start_row and span.start_column == current.start_column
-                  and span.end_row == current.end_row and span.end_column == current.end_column), None)
-    if index is None:
-        return None
-    peer = peers[index + (1 if direction > 0 else -1)] if 0 <= index + (1 if direction > 0 else -1) < len(peers) else None
-    return peer
-
-
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--detect", action="store_true")
+    parser.add_argument("--action-spans", action="store_true")
     parser.add_argument("--input-file")
     parser.add_argument("--smart-action")
     parser.add_argument("--smart-action-target")
-    parser.add_argument("--semantic-select")
-    parser.add_argument("--semantic-sibling")
-    parser.add_argument("--direction", type=int, default=1)
-    parser.add_argument("--expansion-level", type=int, default=0)
     parser.add_argument("--pane-id")
     args = parser.parse_args()
     text = open(args.input_file, encoding="utf-8").read() if args.input_file else sys.stdin.read()
     if args.detect:
         print(json.dumps([asdict(target) for target in detect(text)], ensure_ascii=False))
+    if args.action_spans:
+        print(json.dumps(action_spans(text), ensure_ascii=False))
     if args.smart_action:
         row, column = (int(part) for part in args.smart_action.split(":", 1))
         return smart_action(text, row, column, args.pane_id)
@@ -576,18 +405,6 @@ def main() -> int:
         target = smart_action_target(text, row, column)
         if target:
             print(json.dumps(asdict(target), ensure_ascii=False))
-        return 0
-    if args.semantic_select:
-        row, column = (int(part) for part in args.semantic_select.split(":", 1))
-        span = semantic_select(text, row, column, args.expansion_level)
-        if span:
-            print(json.dumps(asdict(span), ensure_ascii=False))
-        return 0
-    if args.semantic_sibling:
-        row, column = (int(part) for part in args.semantic_sibling.split(":", 1))
-        span = semantic_sibling(text, row, column, args.direction, args.expansion_level)
-        if span:
-            print(json.dumps(asdict(span), ensure_ascii=False))
         return 0
     return 0
 
