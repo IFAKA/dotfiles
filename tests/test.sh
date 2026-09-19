@@ -578,6 +578,7 @@ grep -q 'bg=#1e3a8a.*EDIT' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion
 grep -q 'bg=#854d0e.*COPY' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "EasyMotion COPY status background missing"
 ! grep -q 'EasyMotion.*\[easy-motion\]' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "legacy EasyMotion status label is still rendered"
 grep -q ',#{window_name})' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "ordinary tmux window name fallback missing"
+grep -q '#{E:window-status-format}' "$XDG_CONFIG_HOME/tmux/tmux.conf" || fail "tmux window status format is not expanded in context"
 
 fake_tmux_bin=$(mktemp -d "$test_home/fake-tmux-bin.XXXXXX")
 fake_plugin_dir="$XDG_CONFIG_HOME/tmux/plugins/tmux-easy-motion/scripts"
