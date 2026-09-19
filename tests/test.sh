@@ -570,6 +570,8 @@ assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | se
 colored_usage=$(env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
 ! grep -q 'bg=' <<<"${colored_usage%% |*}" || fail "progress indicator changed its background"
 grep -q 'fg=#' <<<"$colored_usage" || fail "progress indicator color missing"
+grep -q 'fg=colour250,nobold,nodim' <<<"$colored_usage" || fail "reset time is not light neutral"
+grep -q 'fg=colour255,bold,nodim' <<<"$colored_usage" || fail "reset time style was not restored"
 assert_output "$(cat "$usage_calls")" '4'
 printf '0 80 86400 80 43200\n' > "$usage_cache/usage"
 assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1d | wk ⣶ 12h |'

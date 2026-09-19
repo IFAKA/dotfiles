@@ -92,12 +92,18 @@ remaining_indicator() {
 }
 
 usage_value() {
-  local percent="$1" reset="$2"
+  local percent="$1" reset="$2" reset_value
   if [[ "$percent" == -- ]]; then
     printf '?'
     return
   fi
-  printf '%s %s' "$(remaining_indicator "$percent")" "$(format_reset "$reset")"
+  reset_value=$(format_reset "$reset")
+  if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == dumb ]]; then
+    printf '%s %s' "$(remaining_indicator "$percent")" "$reset_value"
+  else
+    printf '%s #[fg=colour250,nobold,nodim]%s#[fg=colour255,bold,nodim]' \
+      "$(remaining_indicator "$percent")" "$reset_value"
+  fi
 }
 
 refresh_usage() {
