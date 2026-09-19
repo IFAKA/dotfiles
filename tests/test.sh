@@ -149,8 +149,8 @@ grep -q 'tmux send-keys -X select-word' "$repo_root/tmux/easy-motion-default.sh"
 ! grep -Eq 'apply_span|semantic-select|semantic-sibling|goto-line|smart-select-' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select added a competing selection state"
 python3 -m py_compile "$repo_root/tmux/smart-actions.py" || fail "smart actions detector syntax"
 grep -q "@smart-actions-highlight-style 'fg=#f8fafc,bg=#115e59,bold'" "$repo_root/tmux/tmux.conf" || fail "Smart Actions teal highlight style missing"
-grep -q 'dotfiles-smart-actions-render-v7' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer patch marker missing"
-grep -q 'dotfiles-smart-actions-render-v\[1-7\]' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer upgrade marker missing"
+grep -q 'dotfiles-smart-actions-render-v9' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer patch marker missing"
+grep -q 'dotfiles-smart-actions-render-v\[1-9\]' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion renderer upgrade marker missing"
 grep -q '_styled_capture_slice' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion action-aware renderer missing"
 grep -q 'smart_action_disabled_styles, smart_action_background_styles, smart_action_ranges' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion disabled-style renderer call missing"
 grep -q '_action_style_at' "$repo_root/tmux/patch-easy-motion.sh" || fail "EasyMotion action label styling missing"
@@ -233,14 +233,14 @@ import pathlib
 import sys
 path = pathlib.Path(sys.argv[1])
 version = sys.argv[2]
-source = path.read_text().replace("dotfiles-smart-actions-render-v7", "dotfiles-smart-actions-render-" + version, 1)
+source = path.read_text().replace("dotfiles-smart-actions-render-v9", "dotfiles-smart-actions-render-" + version, 1)
 if version == "v3":
     source = source.replace("smart_action_background_style, smart_action_ranges", "smart_action_style, smart_action_ranges", 1)
 path.write_text(source)
 PY
   bash "$repo_root/tmux/patch-easy-motion.sh" "$variant" || fail "$renderer_version EasyMotion renderer upgrade failed"
   python3 -m py_compile "$variant/scripts/easy_motion.py" || fail "$renderer_version EasyMotion renderer syntax"
-  grep -q 'dotfiles-smart-actions-render-v7' "$variant/scripts/easy_motion.py" || fail "$renderer_version EasyMotion renderer was not upgraded"
+  grep -q 'dotfiles-smart-actions-render-v9' "$variant/scripts/easy_motion.py" || fail "$renderer_version EasyMotion renderer was not upgraded"
   before=$(cksum < "$variant/scripts/easy_motion.py")
   bash "$repo_root/tmux/patch-easy-motion.sh" "$variant"
   after=$(cksum < "$variant/scripts/easy_motion.py")
@@ -268,10 +268,10 @@ module._smart_action_background_styles = lambda: {
     "copy": "bg=#854d0e",
 }
 module._smart_action_disabled_styles = lambda: {
-    "default": "fg=#f8fafc",
-    "open": "fg=#f8fafc",
-    "edit": "fg=#f8fafc",
-    "copy": "fg=#000000",
+    "default": "RESETfg=#f8fafc",
+    "open": "RESETfg=#f8fafc",
+    "edit": "RESETfg=#f8fafc",
+    "copy": "RESETfg=#000000",
 }
 text = "x https://example.com\n日本語 file.py"
 output = io.StringIO()
@@ -280,11 +280,11 @@ with contextlib.redirect_stdout(output):
 rendered = output.getvalue()
 assert "fg=colour196,boldxRESET" in rendered, rendered
 assert "fg=colour196,boldbg=#1e3a8ayRESET" in rendered, rendered
-assert "fg=#f8fafcDIMbg=#1e3a8a" in rendered, rendered
-assert "fg=#f8fafcDIMbg=#115e59" in rendered, rendered
+assert "DIMRESETfg=#f8fafcbg=#1e3a8a" in rendered, rendered
+assert "DIMRESETfg=#f8fafcbg=#115e59" in rendered, rendered
 action_blocks = module._styled_capture_slice(
     "open edit copy", 0, len("open edit copy"), "DIM",
-    {"open": "fg=#f8fafc", "edit": "fg=#f8fafc", "copy": "fg=#000000"},
+    {"open": "RESETfg=#f8fafc", "edit": "RESETfg=#f8fafc", "copy": "RESETfg=#000000"},
     {"open": "bg=#115e59", "edit": "bg=#1e3a8a", "copy": "bg=#854d0e"},
     [
         {"row": 0, "start_column": 0, "end_column": 3, "action": "open"},
@@ -292,9 +292,9 @@ action_blocks = module._styled_capture_slice(
         {"row": 0, "start_column": 10, "end_column": 13, "action": "copy"},
     ],
 )
-assert "fg=#f8fafcDIMbg=#115e59open" in action_blocks, action_blocks
-assert "fg=#f8fafcDIMbg=#1e3a8aedit" in action_blocks, action_blocks
-assert "fg=#000000DIMbg=#854d0ecopy" in action_blocks, action_blocks
+assert "DIMRESETfg=#f8fafcbg=#115e59open" in action_blocks, action_blocks
+assert "DIMRESETfg=#f8fafcbg=#1e3a8aedit" in action_blocks, action_blocks
+assert "DIMRESETfg=#000000bg=#854d0ecopy" in action_blocks, action_blocks
 assert module._hex_rgb("#abc") == (170, 187, 204)
 assert module._hex_rgb("colour24") is None
 assert module._contrast_ratio((10, 20, 30), (248, 250, 252)) > module._contrast_ratio((10, 20, 30), (0, 0, 0))

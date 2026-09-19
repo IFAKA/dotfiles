@@ -4,7 +4,7 @@ set -euo pipefail
 plugin_dir=${1:?usage: patch-easy-motion.sh PLUGIN_DIR}
 renderer="$plugin_dir/scripts/easy_motion.py"
 motion_script="$plugin_dir/scripts/easy_motion.sh"
-marker='# dotfiles-smart-actions-render-v7'
+marker='# dotfiles-smart-actions-render-v9'
 cancel_marker='# dotfiles-easy-motion-cancel-v2'
 
 [[ -f "$renderer" ]] || { echo "EasyMotion renderer not found: $renderer" >&2; exit 1; }
@@ -202,7 +202,7 @@ def _smart_action_disabled_styles():
         dark = (0, 0, 0)
         foreground = light if _contrast_ratio(rgb, light) >= _contrast_ratio(rgb, dark) else dark
         styles[action] = TerminalCodes.Style.parse_style(
-            "fg=#%02x%02x%02x" % foreground
+            "none,fg=#%02x%02x%02x" % foreground
         )
     styles["default"] = styles.get("open", "")
     return styles
@@ -237,7 +237,7 @@ def _styled_capture_slice(text, start, end, dim_style_code, action_disabled_styl
         background_style = action_background_style_code.get(
             action, action_background_style_code.get("default", "")
         ) if action else ""
-        style = (disabled_style + dim_style_code + background_style
+        style = (dim_style_code + disabled_style + background_style
                  if disabled_style else dim_style_code + background_style)
         if style != active:
             if active is not None:
@@ -269,7 +269,7 @@ def _action_style_at(text, position, action_styles, ranges):
 '''
 
 source = re.sub(
-    r"# dotfiles-smart-actions-render-v[1-7].*?(?=\ndef print_text\()",
+    r"# dotfiles-smart-actions-render-v[1-9].*?(?=\ndef print_text\()",
     lambda _match: helpers,
     source,
     count=1,
