@@ -355,6 +355,39 @@ spans = module.action_spans("😀 https://example.com\n日本語 src/main.py:42:
 assert next(span for span in spans if span["type"] == "url")["start_column"] == 3
 location_span = next(span for span in spans if span["type"] == "location")
 assert (location_span["row"], location_span["start_column"], location_span["action"]) == (1, 7, "edit")
+
+def assert_outer_target(text, expected_type, coordinates):
+    target = max(
+        (item for item in module.detect(text) if item.type == expected_type),
+        key=lambda item: (item.end_row - item.row, item.end_column - item.column),
+    )
+    for row, column in coordinates:
+        selected = module.smart_action_target(text, row, column)
+        assert selected == target, (expected_type, row, column, selected, target)
+
+code_text = "```python\n😀 https://example.com/src/main.py\n  ./lib/module.py\n```"
+code_lines = code_text.splitlines()
+assert_outer_target(code_text, "code", [
+    (1, 0), (1, module.cell_width(code_lines[1]) - 1),
+    (2, 2), (2, module.cell_width(code_lines[2]) - 1),
+])
+json_text = '```json\n{"url":"https://example.com", "path":"./src/main.py"}\n{"ok":true}\n```'
+json_lines = json_text.splitlines()
+assert_outer_target(json_text, "json", [
+    (1, 0), (1, module.cell_width(json_lines[1]) - 1),
+    (2, 0), (2, module.cell_width(json_lines[2]) - 1),
+])
+error_text = "ERROR: https://example.com/src/main.py:42:8"
+assert_outer_target(error_text, "error", [(0, 0), (0, module.cell_width(error_text) - 1)])
+response_text = "assistant: 😀 https://example.com\n日本語 ./src/main.py\nline two\n› next prompt"
+response_lines = response_text.splitlines()
+response = next(item for item in module.detect(response_text) if item.type == "codex-response")
+assert (response.row, response.column, response.end_row, response.end_column) == (0, 0, 2, module.cell_width(response_lines[2]) - 1), response
+assert_outer_target(response_text, "codex-response", [
+    (0, 0), (0, module.cell_width(response_lines[0]) - 1),
+    (1, 0), (1, module.cell_width(response_lines[1]) - 1),
+    (2, 0), (2, module.cell_width(response_lines[2]) - 1),
+])
 PY
 python3 - "$repo_root/tmux/smart-actions.py" <<'PY' || fail "smart actions adversarial cases"
 import importlib.util
@@ -585,6 +618,10 @@ cat > "$fake_tmux_bin/tmux" <<'EOF'
 #!/usr/bin/env bash
 if [[ "$*" == *"#{selection_start_x}"* ]]; then
   printf '%s\n' "${FAKE_TMUX_SELECTION_START_X:-}"
+elif [[ "$*" == *"#{scroll_position}:#{pane_height}"* ]]; then
+  printf '3:7\n'
+elif [[ "$1" == 'capture-pane' ]]; then
+  printf '%s\n' "$*" > "${CAPTURE_ARGS_FILE:-/dev/null}"
 elif [[ "$*" == *"#{session_id}"* ]]; then
   printf 'session-id\n'
 elif [[ "$*" == *"#{window_id}"* ]]; then
@@ -599,11 +636,13 @@ cat > "$fake_plugin_dir/easy_motion.sh" <<'EOF'
 printf '%s\n' "$*" > "${EASY_MOTION_ARGS_FILE:?}"
 EOF
 chmod +x "$fake_plugin_dir/easy_motion.sh"
-FAKE_TMUX_SELECTION_START_X= EASY_MOTION_ARGS_FILE="$test_home/easy-motion-start.args" \
+FAKE_TMUX_SELECTION_START_X= CAPTURE_ARGS_FILE="$test_home/easy-motion-capture.args" EASY_MOTION_ARGS_FILE="$test_home/easy-motion-start.args" \
   TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
   TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \
   bash "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
 grep -q ' pane-id bd-w$' "$test_home/easy-motion-start.args" || fail "EasyMotion START motion is not bd-w"
+grep -q -- '-S -3 -E 3' "$test_home/easy-motion-capture.args" || fail "EasyMotion capture range does not match plugin scroll range"
+! grep -q -- ' -J ' "$test_home/easy-motion-capture.args" || fail "EasyMotion semantic capture unexpectedly joins lines"
 FAKE_TMUX_SELECTION_START_X=0 EASY_MOTION_ARGS_FILE="$test_home/easy-motion-end.args" \
   TMUX_PLUGIN_MANAGER_PATH="$XDG_CONFIG_HOME/tmux/plugins" \
   TMUX='tmux,123,0' PATH="$fake_tmux_bin:$PATH" \

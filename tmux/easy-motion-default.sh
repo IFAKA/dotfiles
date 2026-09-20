@@ -27,7 +27,11 @@ target_keys=${target_keys:-asdfghjklqwertyuiopzxcvbnm}
 capture_file=$(mktemp "${TMPDIR:-/tmp}/dotfiles-easy-motion-smart.XXXXXX")
 marker_file=$(mktemp "${TMPDIR:-/tmp}/dotfiles-easy-motion-keys.XXXXXX")
 trap 'rm -f "$capture_file" "$marker_file"' EXIT
-tmux capture-pane -p -J -t "$pane_id" > "$capture_file"
+IFS=':' read -r scroll_position pane_height <<< \
+  "$(tmux display-message -p -t "$pane_id" '#{scroll_position}:#{pane_height}')"
+scroll_start=$(( -scroll_position ))
+scroll_end=$(( scroll_start + pane_height - 1 ))
+tmux capture-pane -p -t "$pane_id" -S "$scroll_start" -E "$scroll_end" > "$capture_file"
 
 for key in $(printf '%s' "$target_keys" | fold -w1); do
   lower=$(printf '%s' "$key" | tr '[:upper:]' '[:lower:]')

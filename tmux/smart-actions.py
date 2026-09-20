@@ -216,7 +216,10 @@ def detect(text: str) -> list[Target]:
             body.append(line)
         value = "\n".join(body).strip()
         if value:
-            add("codex-response", value, start, 0)
+            last_row = start + len(body) - 1
+            last_line = lines[last_row]
+            add("codex-response", value, start, 0,
+                end_row=last_row, end_column=max(cell_width(last_line) - 1, 0))
 
     priority = {"location": 0, "url": 1, "repository": 2, "path": 3, "error": 4, "codex-resume": 5,
                 "command": 6, "codex-response": 7, "git-ref": 8, "git-hash": 9,
@@ -364,9 +367,9 @@ def smart_action_target(text: str, row: int, column: int) -> Target | None:
     priority = {"codex-resume": 0, "location": 1, "url": 2, "repository": 3, "path": 4,
                 "error": 5, "command": 6, "codex-response": 7, "git-ref": 8,
                 "git-hash": 9, "json": 10, "code": 11, "ip": 12, "timestamp": 13}
-    return min(candidates, key=lambda item: (item.end_row - item.row,
+    return max(candidates, key=lambda item: (item.end_row - item.row,
                                              (item.end_column or item.column) - item.column,
-                                             priority.get(item.type, 99)))
+                                             -priority.get(item.type, 99)))
 
 
 def smart_action(text: str, row: int, column: int, pane_id: str | None) -> int:
