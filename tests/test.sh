@@ -148,7 +148,9 @@ for state in STOPPED FAILED LOGIN; do
 done
 printf 'state=READY\nupdated=%s\n' "$(( $(date +%s) - 3 ))" > "$dw_state/bdlq-018.state"
 expired=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-[[ -z "$expired" ]] || fail "DW terminal state did not hide after three seconds"
+grep -q ' version_test 018 ' <<<"$expired" || fail "DW terminal chip did not remain after three seconds"
+! grep -q ' READY ' <<<"$expired" || fail "DW terminal label did not hide after three seconds"
+grep -q 'bg=#166534' <<<"$expired" || fail "DW terminal color did not remain after three seconds"
 printf 'state=STARTING\n' > "$dw_state/bdlq-018.state"
 starting=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
 grep -Eq 'STARTING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$starting" || fail "DW starting spinner missing"

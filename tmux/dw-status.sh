@@ -45,11 +45,13 @@ state=CHECKING
 updated=
 [[ -r "$state_file" ]] && updated=$(sed -n 's/^updated=//p' "$state_file" | head -n 1)
 
-# Terminal states are useful confirmation, but should not permanently consume
-# tmux status-bar space.  Older cache files without a timestamp stay visible.
+# Terminal states are useful confirmation, but their text should not
+# permanently consume tmux status-bar space. Older cache files without a
+# timestamp stay visible.
 terminal_ttl=${TMUX_DW_TERMINAL_STATE_TTL:-3}
+hide_terminal_label=false
 if [[ "$state" =~ ^(READY|STOPPED|FAILED)$ && "$updated" =~ ^[0-9]+$ && "$terminal_ttl" =~ ^[0-9]+$ ]]; then
-  (( $(date +%s) - updated >= terminal_ttl )) && exit 0
+  (( $(date +%s) - updated >= terminal_ttl )) && hide_terminal_label=true
 fi
 case "$state" in
   STARTING) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number STARTING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='#1d4ed8' ;;
@@ -59,4 +61,5 @@ case "$state" in
   LOGIN) label="$code_version $number LOGIN"; background='#7e22ce' ;;
   *) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number CHECKING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='colour237' ;;
 esac
+[[ "$hide_terminal_label" == true ]] && label="$code_version $number"
 printf '#[fg=colour255,bg=%s,bold] %s #[default]\n' "$background" "$label"
