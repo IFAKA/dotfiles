@@ -135,11 +135,13 @@ grep -q ' version_test dev ' <<<"$dw_project_output" || fail "DW status did not 
 printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
 dw_state="$test_home/dw-state"; mkdir -p "$dw_state"
 dw_sandbox_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -Eq 'version_test 018 CHECKING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$dw_sandbox_output" || fail "DW sandbox checking spinner missing"
+grep -Eq ' 018 CHECKING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$dw_sandbox_output" || fail "DW sandbox checking spinner missing"
+! grep -q 'version_test' <<<"$dw_sandbox_output" || fail "DW sandbox status exposed the code version"
 grep -q 'bg=colour237' <<<"$dw_sandbox_output" || fail "DW checking status is not gray"
 printf 'state=READY\n' > "$dw_state/bdlq-018.state"
 dw_ready_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -q ' version_test 018 READY ' <<<"$dw_ready_output" || fail "DW ready label missing"
+grep -q ' 018 READY ' <<<"$dw_ready_output" || fail "DW ready label missing"
+! grep -q 'version_test' <<<"$dw_ready_output" || fail "DW ready status exposed the code version"
 grep -q 'bg=#166534' <<<"$dw_ready_output" || fail "DW ready status is not green"
 for state in STOPPED FAILED LOGIN; do
   printf 'state=%s\nupdated=%s\n' "$state" "$(date +%s)" > "$dw_state/bdlq-018.state"
@@ -148,7 +150,8 @@ for state in STOPPED FAILED LOGIN; do
 done
 printf 'state=READY\nupdated=%s\n' "$(( $(date +%s) - 3 ))" > "$dw_state/bdlq-018.state"
 expired=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -q ' version_test 018 ' <<<"$expired" || fail "DW terminal chip did not remain after three seconds"
+grep -q ' 018 ' <<<"$expired" || fail "DW terminal chip did not remain after three seconds"
+! grep -q 'version_test' <<<"$expired" || fail "DW terminal chip exposed the code version"
 ! grep -q ' READY ' <<<"$expired" || fail "DW terminal label did not hide after three seconds"
 grep -q 'bg=#166534' <<<"$expired" || fail "DW terminal color did not remain after three seconds"
 printf 'state=STARTING\n' > "$dw_state/bdlq-018.state"
