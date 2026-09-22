@@ -135,8 +135,7 @@ grep -q ' version_test dev ' <<<"$dw_project_output" || fail "DW status did not 
 printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
 dw_state="$test_home/dw-state"; mkdir -p "$dw_state"
 dw_sandbox_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -Eq ' 018 CHECKING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$dw_sandbox_output" || fail "DW sandbox checking spinner missing"
-! grep -q 'version_test' <<<"$dw_sandbox_output" || fail "DW sandbox status exposed the code version"
+grep -Eq 'version_test 018 CHECKING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$dw_sandbox_output" || fail "DW sandbox checking spinner missing"
 grep -q 'bg=colour237' <<<"$dw_sandbox_output" || fail "DW checking status is not gray"
 printf 'state=READY\n' > "$dw_state/bdlq-018.state"
 dw_ready_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
@@ -147,6 +146,7 @@ for state in STOPPED FAILED LOGIN; do
   printf 'state=%s\nupdated=%s\n' "$state" "$(date +%s)" > "$dw_state/bdlq-018.state"
   rendered=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
   grep -q " $state " <<<"$rendered" || fail "DW $state label missing"
+  grep -q 'version_test' <<<"$rendered" || fail "DW $state status hid the code version"
 done
 printf 'state=READY\nupdated=%s\n' "$(( $(date +%s) - 3 ))" > "$dw_state/bdlq-018.state"
 expired=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
@@ -157,6 +157,7 @@ grep -q 'bg=#166534' <<<"$expired" || fail "DW terminal color did not remain aft
 printf 'state=STARTING\n' > "$dw_state/bdlq-018.state"
 starting=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
 grep -Eq 'STARTING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$starting" || fail "DW starting spinner missing"
+grep -q 'version_test' <<<"$starting" || fail "DW starting status hid the code version"
 grep -q 'bg=#1d4ed8' <<<"$starting" || fail "DW starting status is not blue"
 fake_b2c="$test_home/fake-b2c"
 cat > "$fake_b2c" <<'SH'

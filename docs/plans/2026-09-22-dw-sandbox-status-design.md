@@ -2,17 +2,17 @@
 
 ## Decision
 
-Keep the code version in the Dev status label. Omit it from all Sandbox status
-labels, including transient lifecycle states and the compact post-terminal-state
-label.
+Keep the code version in the Dev status label and all Sandbox status labels
+except `READY`. Omit it from the Sandbox `READY` label, including its compact
+post-ready label.
 
 ## Rationale
 
-The version is normally shared with Dev and consumes scarce tmux status-bar
-space without helping distinguish a selected Sandbox. The Sandbox number and
-lifecycle state remain the actionable information.
+When a Sandbox is ready, its number is the only status-bar information needed;
+the version is normally shared with Dev. During transitional and error states,
+retain the version for troubleshooting context.
 
 ## Verification
 
-The test suite asserts that Dev retains its version and Sandbox `CHECKING`,
-`READY`, and compact terminal labels do not expose it.
+The test suite asserts that Dev retains its version, Sandbox `READY` and its
+compact label omit it, and Sandbox transitional/error states retain it.

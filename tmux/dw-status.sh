@@ -54,12 +54,12 @@ if [[ "$state" =~ ^(READY|STOPPED|FAILED)$ && "$updated" =~ ^[0-9]+$ && "$termin
   (( $(date +%s) - updated >= terminal_ttl )) && hide_terminal_label=true
 fi
 case "$state" in
-  STARTING) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$number STARTING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='#1d4ed8' ;;
+  STARTING) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number STARTING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='#1d4ed8' ;;
   READY) label="$number READY"; background='#166534' ;;
-  STOPPED) label="$number STOPPED"; background='#a16207' ;;
-  FAILED) label="$number FAILED"; background='colour124' ;;
-  LOGIN) label="$number LOGIN"; background='#7e22ce' ;;
-  *) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$number CHECKING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='colour237' ;;
+  STOPPED) label="$code_version $number STOPPED"; background='#a16207' ;;
+  FAILED) label="$code_version $number FAILED"; background='colour124' ;;
+  LOGIN) label="$code_version $number LOGIN"; background='#7e22ce' ;;
+  *) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number CHECKING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='colour237' ;;
 esac
 [[ "$hide_terminal_label" == true ]] && label="$number"
 printf '#[fg=colour255,bg=%s,bold] %s #[default]\n' "$background" "$label"
