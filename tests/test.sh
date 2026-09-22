@@ -17,7 +17,7 @@ resource_status_output() {
   env -u TMUX "$repo_root/tmux/resource-status.sh" | sed -E 's/#\[[^]]*\]//g; s/  +/ /g'
 }
 
-bash -n "$repo_root"/{bootstrap,install,update,uninstall} "$repo_root/bin/dw" || fail "shell syntax"
+bash -n "$repo_root"/{bootstrap,install,update,uninstall} "$repo_root/bin/dw" "$repo_root/bin/dw-sandbox" || fail "shell syntax"
 node --check "$repo_root/bin/dw-setup.js" || fail "DW setup helper syntax"
 bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
@@ -132,18 +132,77 @@ mkdir -p "$test_home/dw-project/nested"
 printf '%s\n' '{' '  "hostname": "development-eu01.example.test",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
 dw_project_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-project" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project/nested")
 grep -q ' version_test dev ' <<<"$dw_project_output" || fail "DW status did not expose the code version and environment"
-printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com"' '}' > "$test_home/dw-project/dw.json"
-dw_sandbox_output=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-sandbox" TMUX_DW_STATUS_CACHE_TTL=0 "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -q ' 018 ' <<<"$dw_sandbox_output" || fail "DW status did not expose the sandbox number"
-grep -q 'fg=colour255,bg=colour124,bold' <<<"$dw_sandbox_output" || fail "Unavailable DW sandbox status is not red"
 printf '%s\n' '{' '  "hostname": "bdlq-018.dx.commercecloud.salesforce.com",' '  "code-version": "version_test"' '}' > "$test_home/dw-project/dw.json"
-online_cache="$test_home/dw-cache-online"
-mkdir -p "$online_cache"
-online_key=$(printf '%s\t%s\t%s' "$test_home/dw-project" 'bdlq-018.dx.commercecloud.salesforce.com' 'version_test' | cksum | awk '{print $1}')
-printf '%s online\n' "$(date +%Y-%m-%d)" > "$online_cache/$online_key"
-dw_online_output=$(TMUX_DW_STATUS_CACHE_DIR="$online_cache" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
-grep -q ' version_test 018 ' <<<"$dw_online_output" || fail "DW online status did not expose the code version"
-grep -q 'fg=colour255,bg=#166534,bold' <<<"$dw_online_output" || fail "DW online status is not dark green"
+dw_state="$test_home/dw-state"; mkdir -p "$dw_state"
+dw_sandbox_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+grep -Eq 'version_test 018 CHECKING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$dw_sandbox_output" || fail "DW sandbox checking spinner missing"
+grep -q 'bg=colour237' <<<"$dw_sandbox_output" || fail "DW checking status is not gray"
+printf 'state=READY\n' > "$dw_state/bdlq-018.state"
+dw_ready_output=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+grep -q ' version_test 018 READY ' <<<"$dw_ready_output" || fail "DW ready label missing"
+grep -q 'bg=#166534' <<<"$dw_ready_output" || fail "DW ready status is not green"
+for state in STOPPED FAILED LOGIN; do
+  printf 'state=%s\nupdated=%s\n' "$state" "$(date +%s)" > "$dw_state/bdlq-018.state"
+  rendered=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+  grep -q " $state " <<<"$rendered" || fail "DW $state label missing"
+done
+printf 'state=READY\nupdated=%s\n' "$(( $(date +%s) - 3 ))" > "$dw_state/bdlq-018.state"
+expired=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+[[ -z "$expired" ]] || fail "DW terminal state did not hide after three seconds"
+printf 'state=STARTING\n' > "$dw_state/bdlq-018.state"
+starting=$(DW_SANDBOX_STATE_DIR="$dw_state" "$repo_root/tmux/dw-status.sh" "$test_home/dw-project")
+grep -Eq 'STARTING (⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$starting" || fail "DW starting spinner missing"
+grep -q 'bg=#1d4ed8' <<<"$starting" || fail "DW starting status is not blue"
+fake_b2c="$test_home/fake-b2c"
+cat > "$fake_b2c" <<'SH'
+#!/usr/bin/env bash
+printf '%s\n' "$*" >> "$DW_B2C_CALLS"
+if [[ "$1 $2" == 'sandbox get' ]]; then
+  state=$(head -n 1 "$DW_B2C_STATES")
+  sed -i.bak '1d' "$DW_B2C_STATES"; rm -f "$DW_B2C_STATES.bak"
+  [[ "$state" == ERROR:* ]] && { printf '%s\n' "${state#ERROR:}" >&2; exit 1; }
+  printf '{"state":"%s"}\n' "$state"
+else
+  printf '{"state":"starting"}\n'
+fi
+SH
+fake_curl_dir="$test_home/fake-curl-bin"; mkdir -p "$fake_curl_dir"
+fake_curl="$fake_curl_dir/curl"
+cat > "$fake_curl" <<'SH'
+#!/usr/bin/env bash
+[[ -z "${DW_WEBDAV_CALLS:-}" ]] || printf 'call\n' >> "$DW_WEBDAV_CALLS"
+exit "${DW_WEBDAV_RESULT:-0}"
+SH
+chmod +x "$fake_b2c" "$fake_curl"
+printf '%s\n' '{"hostname":"bdlq-018.dx.commercecloud.salesforce.com","code-version":"version_test","username":"user","password":"secret"}' > "$test_home/dw-project/dw.json"
+run_dw_worker() {
+  : > "$test_home/dw-b2c-calls"
+  DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_SANDBOX_POLL_INTERVAL=0 DW_SANDBOX_POLL_LIMIT=5 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw-sandbox" --path "$test_home/dw-project"
+}
+rm -rf "$test_home/dw-worker-state"; printf 'stopped\nstarted\n' > "$test_home/dw-b2c-states"
+run_dw_worker
+grep -qx 'READY' <(sed -n 's/^state=//p' "$test_home/dw-worker-state/bdlq-018.state") || fail "DW worker did not reach ready"
+grep -q '^sandbox start bdlq-018 --json$' "$test_home/dw-b2c-calls" || fail "DW worker did not start stopped sandbox"
+printf 'ERROR:authentication token expired\n' > "$test_home/dw-b2c-states"; run_dw_worker
+grep -qx 'LOGIN' <(sed -n 's/^state=//p' "$test_home/dw-worker-state/bdlq-018.state") || fail "DW auth error did not request login"
+rm -rf "$test_home/dw-worker-state"; mkdir -p "$test_home/dw-worker-state"
+printf 'date=%s\nattempt=%s\nstate=FAILED\n' "$(date +%F)" "$(date +%F)" > "$test_home/dw-worker-state/bdlq-018.state"
+printf 'stopped\n' > "$test_home/dw-b2c-states"; run_dw_worker
+! grep -q '^sandbox start ' "$test_home/dw-b2c-calls" || fail "DW daily guard sent duplicate start"
+printf 'stopped\nstarted\n' > "$test_home/dw-b2c-states"; : > "$test_home/dw-b2c-calls"
+DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_SANDBOX_POLL_INTERVAL=0 DW_SANDBOX_POLL_LIMIT=5 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw-sandbox" --path "$test_home/dw-project" --retry
+grep -q '^sandbox start bdlq-018 --json$' "$test_home/dw-b2c-calls" || fail "DW retry did not bypass daily guard"
+rm -rf "$test_home/dw-worker-state"; printf 'stopped\nERROR:start rejected\n' > "$test_home/dw-b2c-states"; run_dw_worker
+grep -qx 'FAILED' <(sed -n 's/^state=//p' "$test_home/dw-worker-state/bdlq-018.state") || fail "DW start failure did not become terminal"
+rm -rf "$test_home/dw-worker-state"; printf 'started\nstarted\n' > "$test_home/dw-b2c-states"; : > "$test_home/dw-webdav-calls"
+DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_WEBDAV_RESULT=1 DW_WEBDAV_CALLS="$test_home/dw-webdav-calls" DW_SANDBOX_POLL_INTERVAL=0 DW_SANDBOX_POLL_LIMIT=2 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw-sandbox" --path "$test_home/dw-project"
+[[ $(wc -l < "$test_home/dw-webdav-calls") -eq 2 ]] || fail "DW worker did not wait for delayed WebDAV"
+printf '%s\n' '{"hostname":"development-eu01.example.test","code-version":"version_test","username":"user","password":"secret"}' > "$test_home/dw-project/dw.dev.json"
+printf '%s\n' '{"hostname":"bdlq-018.dx.commercecloud.salesforce.com","code-version":"version_test","username":"user","password":"secret"}' > "$test_home/dw-project/dw.sbx.json"
+printf 'started\n' > "$test_home/dw-b2c-states"; : > "$test_home/dw-b2c-calls"
+DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_SANDBOX_POLL_INTERVAL=0 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw" --path "$test_home/dw-project" sbx >/dev/null
+for _ in {1..40}; do grep -q '^sandbox get bdlq-018 --json$' "$test_home/dw-b2c-calls" && break; sleep 0.05; done
+[[ $(grep -c '^sandbox get bdlq-018 --json$' "$test_home/dw-b2c-calls") -eq 1 ]] || fail "DW sbx did not launch exactly one worker"
 bash -n "$repo_root/tmux/easy-motion-default.sh" || fail "easy motion wrapper syntax"
 grep -q 'tmux send-keys -X select-word' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select native word selection missing"
 ! grep -Eq 'apply_span|semantic-select|semantic-sibling|goto-line|smart-select-' "$repo_root/tmux/easy-motion-default.sh" || fail "Smart Select added a competing selection state"
@@ -482,10 +541,12 @@ if "$repo_root/bin/dw" --path "$test_home" >/dev/null 2>&1; then fail "DW launch
 "$repo_root/install" install dw --yes
 assert_file "$test_home/.local/bin/dw"
 assert_file "$test_home/.local/bin/dw-setup.js"
+assert_file "$test_home/.local/bin/dw-sandbox"
 assert_file "$test_home/.local/bin/.dotfiles-dw-managed"
 "$repo_root/install" uninstall dw --yes
 [[ ! -e "$test_home/.local/bin/dw" ]] || fail "DW uninstall failed"
 [[ ! -e "$test_home/.local/bin/dw-setup.js" ]] || fail "DW setup helper uninstall failed"
+[[ ! -e "$test_home/.local/bin/dw-sandbox" ]] || fail "DW sandbox helper uninstall failed"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"

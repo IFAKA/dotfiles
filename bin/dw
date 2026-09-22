@@ -4,6 +4,7 @@ set -euo pipefail
 usage() {
   cat <<'EOF'
 Usage: dw [profile] [--print] [--migrate] [--ready] [--has-project] [--path DIRECTORY]
+       dw sandbox [login|status|retry] [--path DIRECTORY]
 
 Switch the nearest project's active dw.json between its ignored profiles.
 Profiles are named dw.<profile>.json, for example dw.dev.json and dw.sbx.json.
@@ -12,6 +13,25 @@ EOF
 }
 
 die() { printf 'dw: %s\n' "$*" >&2; exit 1; }
+
+helper_dir=$(cd -P "$(dirname "$0")" && pwd)
+launch_sandbox_worker() {
+  [[ -x "$helper_dir/dw-sandbox" ]] || return 0
+  "$helper_dir/dw-sandbox" --path "$1" --background </dev/null >/dev/null 2>&1 &
+}
+
+if [[ ${1:-} == sandbox ]]; then
+  shift
+  sandbox_action=${1:-status}
+  [[ $# -gt 0 ]] && shift
+  case "$sandbox_action" in
+    login) exec "$helper_dir/dw-sandbox" --login "$@" ;;
+    status) exec "$helper_dir/dw-sandbox" --status "$@" ;;
+    retry) exec "$helper_dir/dw-sandbox" --retry "$@" ;;
+    -h|--help) "$helper_dir/dw-sandbox" --help; exit 0 ;;
+    *) die "unknown sandbox command '$sandbox_action' (expected login, status, or retry)" ;;
+  esac
+fi
 
 path=$PWD
 profile=
@@ -111,10 +131,12 @@ if ((${#profiles[@]} == 0)); then
   helper="$(dirname "$0")/dw-setup.js"
   [[ -f "$helper" ]] || die "no DW profiles found and setup helper is missing"
   if [[ -n "$profile" ]]; then
-    exec node "$helper" "$root" "$profile"
+    node "$helper" "$root" "$profile"
   else
-    exec node "$helper" "$root" --toggle
+    node "$helper" "$root" --toggle
   fi
+  launch_sandbox_worker "$root"
+  exit 0
 fi
 
 if [[ -z "$profile" ]]; then
@@ -132,3 +154,4 @@ trap 'rm -f "$tmp"' EXIT
 cp -p "$source_profile" "$tmp"
 mv -f "$tmp" "$active"
 printf 'DW environment: %s\n' "$profile"
+[[ "$profile" == sbx ]] && launch_sandbox_worker "$root"

@@ -19,6 +19,17 @@ dotfiles-refresh-tmux-window-name() {
 
 add-zsh-hook chpwd dotfiles-refresh-tmux-window-name
 
+# The worker decides whether this is an SFCC ODS project.  Keeping this hook
+# asynchronous means `cd` remains instant and browser authentication is never
+# initiated from a shell hook.
+dotfiles-refresh-dw-sandbox() {
+  local helper="$HOME/.local/bin/dw-sandbox"
+  [[ -x "$helper" ]] || return 0
+  "$helper" --path "$PWD" --background </dev/null >/dev/null 2>&1 &!
+}
+
+add-zsh-hook chpwd dotfiles-refresh-dw-sandbox
+
 # Context-aware backward deletion shared with the Codex PTY wrapper.
 dotfiles-backward-kill-path-component() {
   local prefix="${BUFFER[1,CURSOR]}" suffix="${BUFFER[CURSOR+1,-1]}"

@@ -1,23 +1,22 @@
 #!/usr/bin/env bash
 set -u
 
-# Show the active Prophet/DW target for the pane's project. The remote check is
-# performed once per project/target/code version per calendar day because tmux
-# refreshes the status bar every second.
+# Render the active DW target. Network activity belongs to bin/dw-sandbox;
+# tmux refreshes this script too often to be a safe place for lifecycle calls.
 directory=${1:-}
 [[ -n "$directory" && -d "$directory" ]] || exit 0
 
 find_root() {
   local current=$1
-  while [[ "$current" != "/" ]]; do
+  while :; do
     [[ -f "$current/dw.json" ]] && {
       printf '%s\n' "$current"
       return 0
     }
+    [[ "$current" == / ]] && return 1
     current=${current%/*}
     [[ -n "$current" ]] || current=/
   done
-  [[ -f /dw.json ]] && printf '%s\n' /
 }
 
 json_value() {
@@ -30,72 +29,34 @@ config="$root/dw.json"
 hostname=$(json_value hostname "$config")
 [[ -n "$hostname" ]] || exit 0
 
-label=$hostname
-environment=unknown
-case "${hostname,,}" in
-  *development*|*dev*)
-    label=dev
-    environment=dev
-    ;;
-  *)
-    if [[ $hostname =~ (^|[-.])([0-9]{3})([-.]|$) ]]; then
-      label=${BASH_REMATCH[2]}
-      environment=sandbox
-    elif [[ "${hostname,,}" == *sandbox* || "${hostname,,}" == *sbx* ]]; then
-      label=sbx
-      environment=sandbox
-    else
-      label=XXX
-    fi
-    ;;
-esac
-
-state=unknown
-cache_dir=${TMUX_DW_STATUS_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-dw-status-${UID}}
-mkdir -p "$cache_dir" 2>/dev/null || true
 code_version=$(json_value 'code-version' "$config")
-cache_key=$(printf '%s\t%s\t%s' "$root" "$hostname" "$code_version" | cksum | awk '{print $1}')
-cache_file="$cache_dir/$cache_key"
-pending_file="$cache_file.pending"
-today=$(date +%Y-%m-%d)
-
-if [[ -r "$cache_file" ]]; then
-  read -r cached_day cached_state < "$cache_file" || true
-  if [[ "$cached_day" == "$today" && "$cached_state" == online ]]; then
-    state=online
-  elif [[ "$cached_day" == "$today" && "$cached_state" == offline ]]; then
-    state=offline
-  fi
+host=${hostname,,}
+if [[ "$host" == *development* || "$host" == *dev* ]]; then
+  printf '#[fg=colour255,bg=colour237,bold] %s #[default]\n' "${code_version:+$code_version }dev"
+  exit 0
 fi
+[[ "$host" =~ ^([a-z0-9]{4})-([0-9]{3})\.dx\.commercecloud\.salesforce\.com$ ]] || exit 0
+id="${BASH_REMATCH[1]}-${BASH_REMATCH[2]}"
+number=${BASH_REMATCH[2]}
+state_root=${DW_SANDBOX_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/dw-sandbox}
+state_file="$state_root/$id.state"
+state=CHECKING
+[[ -r "$state_file" ]] && state=$(sed -n 's/^state=//p' "$state_file" | head -n 1)
+updated=
+[[ -r "$state_file" ]] && updated=$(sed -n 's/^updated=//p' "$state_file" | head -n 1)
 
-if [[ "$state" == unknown ]]; then
-  username=$(json_value username "$config")
-  password=$(json_value password "$config")
-  if [[ -n "$username" && -n "$password" && -n "$code_version" ]] && command -v curl >/dev/null 2>&1; then
-    if mkdir "$pending_file" 2>/dev/null; then
-      (
-        result=offline
-        url="https://${hostname}/on/demandware.servlet/webdav/Sites/Cartridges/${code_version}/"
-        if curl -fsS --max-time 3 -X PROPFIND -H 'Depth: 1' -u "$username:$password" "$url" >/dev/null 2>&1; then
-          result=online
-        fi
-        tmp_file="$cache_file.$$"
-        printf '%s %s\n' "$today" "$result" > "$tmp_file" 2>/dev/null && mv -f "$tmp_file" "$cache_file"
-        rmdir "$pending_file" 2>/dev/null || true
-      ) </dev/null >/dev/null 2>&1 &
-    fi
-  else
-    printf '%s offline\n' "$today" > "$cache_file" 2>/dev/null || true
-    state=offline
-  fi
+# Terminal states are useful confirmation, but should not permanently consume
+# tmux status-bar space.  Older cache files without a timestamp stay visible.
+terminal_ttl=${TMUX_DW_TERMINAL_STATE_TTL:-3}
+if [[ "$state" =~ ^(READY|STOPPED|FAILED)$ && "$updated" =~ ^[0-9]+$ && "$terminal_ttl" =~ ^[0-9]+$ ]]; then
+  (( $(date +%s) - updated >= terminal_ttl )) && exit 0
 fi
-
-status_text=$label
-[[ -n "$code_version" ]] && status_text="$code_version $status_text"
-if [[ "$state" == online ]]; then
-  printf '#[fg=colour255,bg=#166534,bold] %s #[default]\n' "$status_text"
-elif [[ "$state" == offline ]]; then
-  printf '#[fg=colour255,bg=colour124,bold] %s #[default]\n' "$status_text"
-else
-  printf '#[fg=colour255,bg=colour237,bold] %s #[default]\n' "$status_text"
-fi
+case "$state" in
+  STARTING) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number STARTING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='#1d4ed8' ;;
+  READY) label="$code_version $number READY"; background='#166534' ;;
+  STOPPED) label="$code_version $number STOPPED"; background='#a16207' ;;
+  FAILED) label="$code_version $number FAILED"; background='colour124' ;;
+  LOGIN) label="$code_version $number LOGIN"; background='#7e22ce' ;;
+  *) frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏); label="$code_version $number CHECKING ${frames[$(($(date +%s) % ${#frames[@]}))]}"; background='colour237' ;;
+esac
+printf '#[fg=colour255,bg=%s,bold] %s #[default]\n' "$background" "$label"

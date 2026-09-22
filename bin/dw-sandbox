@@ -1,0 +1,145 @@
+#!/usr/bin/env bash
+# Manage the lifecycle of the ODS selected by a project's dw.json.  This file
+# deliberately owns all network activity; tmux only reads the state files it
+# writes.
+set -u
+
+STATE_ROOT=${DW_SANDBOX_STATE_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/dw-sandbox}
+POLL_INTERVAL=${DW_SANDBOX_POLL_INTERVAL:-5}
+POLL_LIMIT=${DW_SANDBOX_POLL_LIMIT:-120}
+
+say() { [[ ${quiet:-false} == true ]] || printf '%s\n' "$*"; }
+die() { printf 'dw sandbox: %s\n' "$*" >&2; exit 2; }
+
+find_root() {
+  local current=$1
+  while :; do
+    [[ -f "$current/dw.json" ]] && { printf '%s\n' "$current"; return 0; }
+    [[ "$current" == / ]] && return 1
+    current=${current%/*}; [[ -n "$current" ]] || current=/
+  done
+}
+
+json_value() {
+  local key=$1 file=$2
+  sed -nE "s/.*\"${key}\"[[:space:]]*:[[:space:]]*\"([^\"]*)\".*/\1/p" "$file" | head -n 1
+}
+
+sandbox_id() {
+  local host=${1,,}
+  if [[ "$host" =~ ^([a-z0-9]{4})-([0-9]{3})\.dx\.commercecloud\.salesforce\.com$ ]]; then
+    printf '%s-%s\n' "${BASH_REMATCH[1]}" "${BASH_REMATCH[2]}"
+  fi
+}
+
+ensure_state_root() { mkdir -p "$STATE_ROOT" && chmod 700 "$STATE_ROOT"; }
+state_file() { printf '%s/%s.state\n' "$STATE_ROOT" "$1"; }
+write_state() {
+  local id=$1 state=$2 detail=${3:-} attempt=${4:-} existing
+  ensure_state_root || return 1
+  local file tmp
+  file=$(state_file "$id"); tmp="$file.$$"
+  [[ -n "$attempt" ]] || attempt=$(sed -n 's/^attempt=//p' "$file" 2>/dev/null | head -n 1)
+  printf 'date=%s\nattempt=%s\nstate=%s\ndetail=%s\nupdated=%s\n' "$(date +%F)" "$attempt" "$state" "$detail" "$(date +%s)" > "$tmp"
+  chmod 600 "$tmp"; mv -f "$tmp" "$file"
+}
+read_state() { [[ -r "$(state_file "$1")" ]] && sed -n 's/^state=//p' "$(state_file "$1")" | head -n 1; }
+read_attempt() { [[ -r "$(state_file "$1")" ]] && sed -n 's/^attempt=//p' "$(state_file "$1")" | head -n 1; }
+
+run_b2c() {
+  if [[ -n ${DW_B2C:-} ]]; then "$DW_B2C" "$@"; return; fi
+  local nvm_dir=${NVM_DIR:-$HOME/.nvm}
+  [[ -s "$nvm_dir/nvm.sh" ]] || { printf 'nvm is unavailable\n' >&2; return 127; }
+  # shellcheck disable=SC1090
+  source "$nvm_dir/nvm.sh"
+  nvm exec 22.16.0 b2c "$@"
+}
+
+webdav_ready() {
+  local host=$1 user=$2 password=$3 version=$4
+  command -v curl >/dev/null 2>&1 || return 1
+  curl -fsS --max-time 5 -X PROPFIND -H 'Depth: 1' -u "$user:$password" \
+    "https://${host}/on/demandware.servlet/webdav/Sites/Cartridges/${version}/" >/dev/null 2>&1
+}
+
+json_state() { sed -nE 's/.*"(state|sandboxState)"[[:space:]]*:[[:space:]]*"([^"]+)".*/\2/p' "$1" | head -n 1 | tr '[:upper:]' '[:lower:]'; }
+is_login_error() { grep -Eqi 'login|auth|token|unauthori[sz]ed|\b401\b|\b403\b' "$1"; }
+
+load_project() {
+  root=$(find_root "$path") || return 1
+  config="$root/dw.json"
+  hostname=$(json_value hostname "$config")
+  code_version=$(json_value code-version "$config")
+  username=$(json_value username "$config")
+  password=$(json_value password "$config")
+  id=$(sandbox_id "$hostname")
+  [[ -n "$id" && -n "$code_version" && -n "$username" && -n "$password" ]]
+}
+
+worker() {
+  load_project || return 0
+  ensure_state_root || return 0
+  local lock="$STATE_ROOT/$id.lock" output api_state today count=0
+  mkdir "$lock" 2>/dev/null || return 0
+  trap "rmdir '$lock' 2>/dev/null || true" EXIT
+  today=$(date +%F)
+  write_state "$id" CHECKING
+  # Never let a background hook enter the CLI's browser OAuth flow. A saved
+  # session is required here; `dw sandbox login` is the explicit browser path.
+  output=$(mktemp "${TMPDIR:-/tmp}/dw-sandbox.XXXXXX")
+  if ! run_b2c auth client token --json >"$output" 2>&1; then
+    write_state "$id" LOGIN 'run dw sandbox login'
+    rm -f "$output"; return 0
+  fi
+  rm -f "$output"
+  while (( count < POLL_LIMIT )); do
+    output=$(mktemp "${TMPDIR:-/tmp}/dw-sandbox.XXXXXX")
+    if ! run_b2c sandbox get "$id" --json >"$output" 2>&1; then
+      if is_login_error "$output"; then write_state "$id" LOGIN 'authentication required'; else write_state "$id" FAILED 'sandbox query failed'; fi
+      rm -f "$output"; return 0
+    fi
+    api_state=$(json_state "$output"); rm -f "$output"
+    case "$api_state" in
+      started)
+        if webdav_ready "$hostname" "$username" "$password" "$code_version"; then write_state "$id" READY; return 0; fi
+        write_state "$id" STARTING 'waiting for WebDAV' ;;
+      stopped)
+        if [[ ${force:-false} != true && $(read_attempt "$id") == "$today" ]]; then write_state "$id" STOPPED 'already attempted today'; return 0; fi
+        write_state "$id" STARTING '' "$today"
+        output=$(mktemp "${TMPDIR:-/tmp}/dw-sandbox.XXXXXX")
+        if ! run_b2c sandbox start "$id" --json >"$output" 2>&1; then
+          if is_login_error "$output"; then write_state "$id" LOGIN 'authentication required'; else write_state "$id" FAILED 'start request failed'; fi
+          rm -f "$output"; return 0
+        fi
+        rm -f "$output"; force=false ;;
+      starting|pending|creating|provisioning) write_state "$id" STARTING ;;
+      failed|error) write_state "$id" FAILED "Salesforce state: $api_state"; return 0 ;;
+      *) write_state "$id" FAILED "unknown Salesforce state: ${api_state:-empty}"; return 0 ;;
+    esac
+    ((count++)); sleep "$POLL_INTERVAL"
+  done
+  write_state "$id" FAILED 'startup timed out'
+}
+
+login() { run_b2c auth login; }
+status() {
+  load_project || die 'no active SFCC sandbox configuration in dw.json'
+  run_b2c sandbox get "$id" --json
+}
+
+usage() { printf '%s\n' 'Usage: dw-sandbox [--path DIRECTORY] [--background|--retry|--status|--login]'; }
+path=$PWD; action=worker; quiet=false; force=false
+while (($#)); do
+  case "$1" in
+    --path) (($# >= 2)) || die '--path requires a directory'; path=$2; shift 2 ;;
+    --background) quiet=true; shift ;;
+    --retry) force=true; shift ;;
+    --status) action=status; shift ;;
+    --login) action=login; shift ;;
+    -h|--help) usage; exit 0 ;;
+    *) die "unknown option: $1" ;;
+  esac
+done
+[[ -d "$path" ]] || die "directory does not exist: $path"
+path=$(cd -P "$path" && pwd)
+case "$action" in worker) worker ;; status) status ;; login) login ;; esac
