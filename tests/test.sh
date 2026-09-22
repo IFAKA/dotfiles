@@ -124,7 +124,7 @@ grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status
 grep -q 'vim.opt.title = true' "$repo_root/nvim/lua/options.lua" || fail "Neovim terminal titles are disabled"
 grep -q 'vim.opt.titlestring' "$repo_root/nvim/lua/options.lua" || fail "Neovim filename title is missing"
 grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
-grep -q '^bind e if-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
+grep -q '^bind E if-shell' "$repo_root/tmux/tmux.conf" || fail "DW environment toggle binding is missing"
 ! grep -q 'display-message.*DW environment' "$repo_root/tmux/tmux.conf" || fail "DW toggle still shows a toast"
 dw_without_config=$(TMUX_DW_STATUS_CACHE_DIR="$test_home/dw-cache-empty" "$repo_root/tmux/dw-status.sh" "$test_home")
 [[ -z "$dw_without_config" ]] || fail "DW status appeared without dw.json"
