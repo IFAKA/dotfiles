@@ -819,7 +819,7 @@ for _ in {1..40}; do
   sleep 0.05
 done
 assert_file "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1m · wk ⣶ 1m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m · wk 80% 1m |'
 colored_usage=$(env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
 ! grep -q 'bg=' <<<"${colored_usage%% |*}" || fail "progress indicator changed its background"
 grep -q 'fg=#' <<<"$colored_usage" || fail "progress indicator color missing"
@@ -827,29 +827,29 @@ grep -q 'fg=colour250,nobold,nodim' <<<"$colored_usage" || fail "reset time is n
 grep -q 'fg=colour255,bold,nodim' <<<"$colored_usage" || fail "reset time style was not restored"
 assert_output "$(cat "$usage_calls")" '4'
 printf '0 80 86400 80 43200\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1d · wk ⣶ 12h |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1d · wk 80% 12h |'
 printf '0 80 3600 80 0\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h ⣶ 1h · wk ⣶ 0m |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1h · wk 80% 0m |'
 assert_output "$(cat "$usage_calls")" '4'
 
-usage_indicator() {
+usage_percentage() {
   local value="$1"
   printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/usage"
   env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
-    sed -E 's/#\[[^]]*\]//g' | sed -E 's/^ 5h (.) 1m · wk . 1m \|$/\1/'
+    sed -E 's/#\[[^]]*\]//g' | sed -E 's/^ 5h ([0-9]+%) 1m · wk [0-9]+% 1m \|$/\1/'
 }
 
-expected_indicators=('⠀' '⠀' '⡀' '⣀' '⣤' '⣶' '⣷' '⣷' '⣿' '⣿')
-indicator_values=(0 1 12.5 25 50 75 87.5 90 99 100)
-for index in "${!indicator_values[@]}"; do
-  indicator=$(usage_indicator "${indicator_values[index]}")
-  assert_output "$indicator" "${expected_indicators[index]}"
+expected_percentages=('0%' '1%' '12%' '25%' '50%' '75%' '87%' '90%' '99%' '100%')
+percentage_values=(0 1 12.5 25 50 75 87.5 90 99 100)
+for index in "${!percentage_values[@]}"; do
+  percentage=$(usage_percentage "${percentage_values[index]}")
+  assert_output "$percentage" "${expected_percentages[index]}"
 done
 
 exact_values=(100 99 87.5 75 62.5 50 37.5 25 12.5 1 0)
-exact_glyphs=('⣿' '⣿' '⣷' '⣶' '⣦' '⣤' '⣄' '⣀' '⡀' '⠀' '⠀')
+exact_percentages=('100%' '99%' '87%' '75%' '62%' '50%' '37%' '25%' '12%' '1%' '0%')
 for index in "${!exact_values[@]}"; do
-  assert_output "$(usage_indicator "${exact_values[index]}")" "${exact_glyphs[index]}"
+  assert_output "$(usage_percentage "${exact_values[index]}")" "${exact_percentages[index]}"
 done
 
 color_at() {
@@ -864,29 +864,10 @@ color_at() {
 printf '0 80 60 80 60\n' > "$usage_cache/usage"
 no_color_output=$(NO_COLOR=1 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
-assert_output "$no_color_output" ' 5h ⣶ 1m · wk ⣶ 1m |'
-[[ "$no_color_output" != *%* ]] || fail "numeric percentage leaked into indicator"
+assert_output "$no_color_output" ' 5h 80% 1m · wk 80% 1m |'
 fallback_output=$(env "${usage_env[@]}" TERM=dumb NO_COLOR=1 "$repo_root/tmux/codex-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
-assert_output "$fallback_output" ' 5h ⣶ 1m · wk ⣶ 1m |'
-python3 - "$no_color_output" <<'PY' || fail "progress indicator width"
-import re
-import sys
-import unicodedata
-import ctypes
-import locale
-
-value = re.sub(r"\x1b\[[0-?]*[ -/]*[@-~]", "", sys.argv[1])
-fields = re.findall(r"(?:5h|wk) (.)", value)
-assert fields == ["⣶", "⣶"], repr(value)
-assert all(unicodedata.east_asian_width(char) in "NAH" for char in fields)
-assert len(fields) == 2
-locale.setlocale(locale.LC_CTYPE, "")
-libc = ctypes.CDLL(None)
-libc.wcwidth.argtypes = [ctypes.c_wchar]
-libc.wcwidth.restype = ctypes.c_int
-assert all(libc.wcwidth(char) == 1 for char in fields), fields
-PY
+assert_output "$fallback_output" ' 5h 80% 1m · wk 80% 1m |'
 printf '0 -- 60 -- 60\n' > "$usage_cache/usage"
 unknown_output=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g')
 assert_output "$unknown_output" ' 5h ? · wk ? |'

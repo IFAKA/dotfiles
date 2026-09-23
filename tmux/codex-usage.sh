@@ -31,8 +31,6 @@ cache_root="${TMUX_CODEX_USAGE_CACHE_DIR:-${TMUX_TMPDIR:-/tmp}/dotfiles-codex-us
 cache_dir="$cache_root"
 cache_file="$cache_dir/usage"
 refresh_lock="$cache_dir/.refresh.lock"
-braille_states=('⣿' '⣷' '⣶' '⣦' '⣤' '⣄' '⣀' '⡀' '⠀')
-
 format_reset() {
   local seconds="$1"
   local days hours minutes
@@ -69,26 +67,25 @@ remaining_color() {
   }'
 }
 
-remaining_block() {
-  local value="$1" index
-  index=$(awk -v value="$value" 'BEGIN {
+remaining_percentage() {
+  local value="$1"
+  awk -v value="$value" 'BEGIN {
     if (value < 0) value = 0
     if (value > 100) value = 100
-    printf "%d", int(value * 8 / 100 + 0.5)
-  }')
-  printf '%s' "${braille_states[8 - index]}"
+    printf "%d%%", int(value)
+  }'
 }
 
 remaining_indicator() {
-  local value="$1" block color
-  block=$(remaining_block "$value")
+  local value="$1" percentage color
+  percentage=$(remaining_percentage "$value")
   if [[ -n "${NO_COLOR:-}" || "${TERM:-}" == dumb ]]; then
-    printf '%s' "$block"
+    printf '%s' "$percentage"
     return
   fi
   color=$(remaining_color "$value")
   # Preserve the caller's background; the indicator itself has no background.
-  printf '#[fg=%s,bold]%s#[fg=colour255,bold]' "$color" "$block"
+  printf '#[fg=%s,bold]%s#[fg=colour255,bold]' "$color" "$percentage"
 }
 
 usage_value() {
