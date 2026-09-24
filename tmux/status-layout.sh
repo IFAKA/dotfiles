@@ -1,17 +1,27 @@
 #!/usr/bin/env bash
 
-# Keep the status bar on one line until the client is narrow enough that the
-# right-side indicators are likely to be truncated.
+# tmux status options are global, so use the narrowest connected client. This
+# keeps a phone client usable even when a desktop client is attached too.
 set -u
 
-client_width=${1:-}
 threshold=$(tmux show-option -gqv @status-overflow-width 2>/dev/null || true)
 
-[[ "$client_width" =~ ^[0-9]+$ ]] || exit 0
 [[ "$threshold" =~ ^[0-9]+$ ]] || threshold=160
 
+min_width=
+while IFS= read -r client_width; do
+  [[ "$client_width" =~ ^[0-9]+$ ]] || continue
+  if [[ -z "$min_width" || "$client_width" -lt "$min_width" ]]; then
+    min_width=$client_width
+  fi
+done < <(tmux list-clients -F '#{client_width}' 2>/dev/null || true)
+
+# Keep direct/manual invocations useful when tmux has no client list yet.
+[[ -n "$min_width" ]] || min_width=${1:-}
+[[ "$min_width" =~ ^[0-9]+$ ]] || exit 0
+
 state=0
-(( client_width < threshold )) && state=1
+(( min_width < threshold )) && state=1
 
 current=$(tmux show-option -gqv @dotfiles-status-overflow 2>/dev/null || true)
 if [[ "$current" != "$state" ]]; then
