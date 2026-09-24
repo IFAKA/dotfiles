@@ -28,10 +28,12 @@ current=$(tmux show-option -gqv @dotfiles-status-overflow 2>/dev/null || true)
 if [[ "$current" != "$state" ]]; then
   tmux set-option -gq @dotfiles-status-overflow "$state"
   if (( state == 1 )); then
+    tmux set-option -g status 2
     tmux set-option -gq status-right ''
     tmux set-option -gq @dotfiles-status-details "$status_details"
     tmux set-option -g status-format[1] '#[align=right]#{E:@dotfiles-status-details}'
   else
+    tmux set-option -g status on
     tmux set-option -g status-right "$status_details"
     tmux set-option -gu status-format[1]
   fi
