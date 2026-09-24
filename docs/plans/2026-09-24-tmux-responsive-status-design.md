@@ -9,8 +9,10 @@ narrow enough that the status bar is likely to be truncated.
 ## Design
 
 - Keep the existing session and window list as the first status line.
-- Store the current right-side indicator format in a reusable tmux user option.
-- In the one-line layout, render that option on line 1.
+- Keep the right-side indicator commands directly in each status format so
+  tmux executes their `#(...)` commands instead of treating them as literal
+  text.
+- In the one-line layout, render the indicators on line 1.
 - In the two-line layout, suppress it on line 1 and add a right-aligned
   `status-format[1]` line.
 - A small shell helper compares `#{client_width}` with a configurable

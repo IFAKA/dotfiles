@@ -909,7 +909,7 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 779 "$
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 777 "$test_home/code/foo_bar_checkout_service/tests")" 'checkout'
 grep -q '"#{pane_current_path}" #{q:pane_title})' "$repo_root/tmux/tmux.conf" || fail "pane title shell quoting changed"
 grep -q '^bind c new-window -a -c "#{pane_current_path}"$' "$repo_root/tmux/tmux.conf" || fail "new-window binding does not insert after the active window"
-status_right=$(grep '^set -g @dotfiles-status-right ' "$repo_root/tmux/tmux.conf")
+status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")
 git_position=${status_right%%git-status.sh*}
 vercel_position=${status_right%%vercel-status.sh*}
 resource_position=${status_right%%resource-status.sh*}
