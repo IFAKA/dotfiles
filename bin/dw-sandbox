@@ -93,6 +93,10 @@ worker() {
   fi
   rm -f "$output"
   while (( count < POLL_LIMIT )); do
+    # Reload the active project config on every poll. Credentials can be
+    # rotated while this worker is waiting for WebDAV; do not keep using a
+    # stale password captured when the worker started.
+    load_project || { write_state "$id" FAILED 'invalid dw.json'; return 0; }
     output=$(mktemp "${TMPDIR:-/tmp}/dw-sandbox.XXXXXX")
     if ! run_b2c sandbox get "$id" --json >"$output" 2>&1; then
       if is_login_error "$output"; then write_state "$id" LOGIN 'authentication required'; else write_state "$id" FAILED 'sandbox query failed'; fi

@@ -177,7 +177,9 @@ fake_curl_dir="$test_home/fake-curl-bin"; mkdir -p "$fake_curl_dir"
 fake_curl="$fake_curl_dir/curl"
 cat > "$fake_curl" <<'SH'
 #!/usr/bin/env bash
-[[ -z "${DW_WEBDAV_CALLS:-}" ]] || printf 'call\n' >> "$DW_WEBDAV_CALLS"
+if [[ -n "${DW_WEBDAV_CALLS:-}" ]]; then
+  printf '%s\n' "$*" >> "$DW_WEBDAV_CALLS"
+fi
 exit "${DW_WEBDAV_RESULT:-0}"
 SH
 chmod +x "$fake_b2c" "$fake_curl"
@@ -204,6 +206,29 @@ grep -qx 'FAILED' <(sed -n 's/^state=//p' "$test_home/dw-worker-state/bdlq-018.s
 rm -rf "$test_home/dw-worker-state"; printf 'started\nstarted\n' > "$test_home/dw-b2c-states"; : > "$test_home/dw-webdav-calls"
 DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_WEBDAV_RESULT=1 DW_WEBDAV_CALLS="$test_home/dw-webdav-calls" DW_SANDBOX_POLL_INTERVAL=0 DW_SANDBOX_POLL_LIMIT=2 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw-sandbox" --path "$test_home/dw-project"
 [[ $(wc -l < "$test_home/dw-webdav-calls") -eq 2 ]] || fail "DW worker did not wait for delayed WebDAV"
+rm -rf "$test_home/dw-worker-state"; printf 'started\nstarted\n' > "$test_home/dw-b2c-states"
+printf '%s\n' '{"hostname":"bdlq-018.dx.commercecloud.salesforce.com","code-version":"version_test","username":"user","password":"old-secret"}' > "$test_home/dw-project/dw.json"
+: > "$test_home/dw-webdav-calls"
+cat > "$fake_curl" <<'SH'
+#!/usr/bin/env bash
+call_number=0
+[[ -n "${DW_WEBDAV_CALLS:-}" ]] && call_number=$(( $(wc -l < "$DW_WEBDAV_CALLS") ))
+[[ -n "${DW_WEBDAV_CALLS:-}" ]] && printf '%s\n' "$*" >> "$DW_WEBDAV_CALLS"
+if [[ "$call_number" == 0 ]]; then
+  sed -i.bak 's/old-secret/new-secret/' "$DW_PROJECT_CONFIG"
+  rm -f "$DW_PROJECT_CONFIG.bak"
+  exit 1
+fi
+for ((i = 1; i <= $#; i++)); do
+  if [[ "${!i}" == '-u' ]]; then
+    next=$((i + 1)); [[ "${!next}" == 'user:new-secret' ]] && exit 0
+  fi
+done
+exit 1
+SH
+chmod +x "$fake_curl"
+DW_PROJECT_CONFIG="$test_home/dw-project/dw.json" DW_SANDBOX_STATE_DIR="$test_home/dw-worker-state" DW_B2C="$fake_b2c" DW_B2C_CALLS="$test_home/dw-b2c-calls" DW_B2C_STATES="$test_home/dw-b2c-states" DW_WEBDAV_CALLS="$test_home/dw-webdav-calls" DW_SANDBOX_POLL_INTERVAL=0 DW_SANDBOX_POLL_LIMIT=2 PATH="$(dirname "$fake_curl"):$PATH" "$repo_root/bin/dw-sandbox" --path "$test_home/dw-project"
+grep -qx 'READY' <(sed -n 's/^state=//p' "$test_home/dw-worker-state/bdlq-018.state") || fail "DW worker did not reload changed dw.json credentials"
 printf '%s\n' '{"hostname":"development-eu01.example.test","code-version":"version_test","username":"user","password":"secret"}' > "$test_home/dw-project/dw.dev.json"
 printf '%s\n' '{"hostname":"bdlq-018.dx.commercecloud.salesforce.com","code-version":"version_test","username":"user","password":"secret"}' > "$test_home/dw-project/dw.sbx.json"
 printf 'started\n' > "$test_home/dw-b2c-states"; : > "$test_home/dw-b2c-calls"
