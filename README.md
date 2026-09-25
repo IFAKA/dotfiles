@@ -30,7 +30,7 @@ to timestamped backups before replacement or removal; unrelated files in the
 configuration directories are left alone. tmux does not require Neovim, and
 Neovim does not require tmux.
 
-tmux shows Git, Vercel deployment, and Codex usage information followed by compact, color-graded
+tmux shows Git, Vercel deployment, and Codex/Claude usage information followed by compact, color-graded
 `CPU MEM` labels at the rightmost edge of the status bar. Each label changes color based
 on its current usage; the full process list and process names are available in the btop
 popup. Git information is for the
@@ -93,13 +93,14 @@ authentication fails.
 Press `C-Space` then `e` to toggle the active pane's project and show the
 selected environment. `C-Space` then `d` remains tmux detach.
 
-The right side shows Codex's `5h` and `wk` usage windows only while the active
-tmux pane belongs to a Codex window. Codex windows read the same latest cached
-value. The API is queried only when a Codex session opens, an action is
-required, or a response finishes; status-bar renders only read the cache. The
-usage helper comes from
-`artischocki/agent-usage-tmux`; before the first refresh it shows an empty
-placeholder.
+The right side shows the `5h` and `wk` usage windows of the coding agent in
+the active tmux pane: Codex or Claude Code. Nothing is shown for other panes.
+Each agent has its own cache, which every window running that agent reads. An
+agent's usage API is queried only when a session opens, an action is required,
+or a response finishes; status-bar renders only read the cache. The usage
+fetchers come from `artischocki/agent-usage-tmux`. Claude's OAuth token is read
+from `~/.claude/.credentials.json`, or from the macOS keychain where Claude Code
+stores it. Before the first refresh the bar shows a `?` placeholder.
 
 Press `C-Space` then `g` from any tmux pane to open LazyGit in a large popup rooted
 in that pane's current directory. Close LazyGit to return to the underlying
@@ -133,14 +134,14 @@ tmux names windows from the active pane. For an ordinary shell pane, it derives
 a short name from the current directory only: structural, environment, and
 version-like directory components are ignored, and the shortest meaningful
 name is retained. For example, `ikp-digi-wcp-custom-sfra` becomes `sfra`.
-Opening a file does not change a shell window's name. For a Codex pane, the
-managed helper uses that pane's Codex title and displays the
+Opening a file does not change a shell window's name. For a Codex or Claude pane, the
+managed helper uses that pane's agent title and displays the
 conversation name, such as
 `codex: Show tmux session names`. Other recognized applications receive stable
 labels; this keeps simultaneous Codex conversations in the same repository
 independent. If no pane title is available, it falls back to the active
 working directory in Codex's local session database. Unknown applications use
-their executable name. Codex windows also show a compact pane-state icon: `✦`
+their executable name. Codex and Claude windows also show a compact pane-state icon: `✦`
 while idle and caught up, a one-character-at-a-time Braille marquee while
 active, `⚠` when confirmation appears to be required, and `✓` when ready for
 the next prompt in a background window. The completion check disappears while

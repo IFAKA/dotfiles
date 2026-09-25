@@ -5,7 +5,7 @@
 set -u
 
 threshold=$(tmux show-option -gqv @status-overflow-width 2>/dev/null || true)
-status_details='#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/dw-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/git-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/vercel-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/codex-usage.sh" "#{pane_pid}" "#{window_id}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/resource-status.sh")'
+status_details='#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/dw-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/git-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/vercel-status.sh" "#{pane_current_path}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/agent-usage.sh" "#{pane_pid}" "#{window_id}")#(bash "${XDG_CONFIG_HOME:-$HOME/.config}/tmux/resource-status.sh")'
 
 [[ "$threshold" =~ ^[0-9]+$ ]] || threshold=160
 

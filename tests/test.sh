@@ -23,8 +23,8 @@ bash -n "$repo_root/tmux/git-status.sh" || fail "git status script syntax"
 bash -n "$repo_root/tmux/resource-status.sh" || fail "resource status script syntax"
 bash -n "$repo_root/tmux/dw-status.sh" || fail "DW status script syntax"
 bash -n "$repo_root/tmux/program-name.sh" || fail "program name script syntax"
-bash -n "$repo_root/tmux/codex-status.sh" || fail "codex status script syntax"
-bash -n "$repo_root/tmux/codex-usage.sh" || fail "codex usage script syntax"
+bash -n "$repo_root/tmux/agent-status.sh" || fail "codex status script syntax"
+bash -n "$repo_root/tmux/agent-usage.sh" || fail "codex usage script syntax"
 bash -n "$repo_root/tmux/status-layout.sh" || fail "status layout script syntax"
 bash -n "$repo_root/tmux/vercel-status.sh" || fail "Vercel status script syntax"
 bash -n "$repo_root/tmux/vercel-deploy-common.sh" "$repo_root/tmux/vercel-deploy-watch.sh" "$repo_root/tmux/post-push" || fail "Vercel event scripts syntax"
@@ -108,6 +108,7 @@ cat > "$fake_process_bin/ps" <<'SH'
 case "${@: -1}" in
   4242) printf 'zsh\n' ;;
   4343) printf 'codex --resume abc\n' ;;
+  4444) printf 'claude --resume abc\n' ;;
   *) exit 1 ;;
 esac
 SH
@@ -116,12 +117,15 @@ cat > "$fake_process_bin/pgrep" <<'SH'
 exit 1
 SH
 chmod +x "$fake_process_bin/ps" "$fake_process_bin/pgrep"
-ordinary_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/codex-usage.sh" 4242 '@1')
+ordinary_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/agent-usage.sh" 4242 '@1')
 [[ -z "$ordinary_usage" ]] || fail "Codex usage appeared in an ordinary shell window"
-codex_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/codex-usage.sh" 4343 '@2')
+codex_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/agent-usage.sh" 4343 '@2')
 grep -q '5h' <<<"$codex_usage" || fail "Codex usage disappeared from a Codex window"
-grep -q 'codex-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
-grep -q 'codex-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
+cp "$codex_usage_plugin/agent-usage-tmux/scripts/fetch_codex_usage.py" "$codex_usage_plugin/agent-usage-tmux/scripts/fetch_claude_usage.py"
+claude_usage=$(PATH="$fake_process_bin:$PATH" TMUX_PLUGIN_MANAGER_PATH="$codex_usage_plugin" "$repo_root/tmux/agent-usage.sh" 4444 '@3')
+grep -q '5h' <<<"$claude_usage" || fail "Claude usage is missing from a Claude window"
+grep -q 'agent-status.sh' "$repo_root/tmux/tmux.conf" || fail "Codex status icon is missing from window tabs"
+grep -q 'agent-usage.sh' "$repo_root/tmux/tmux.conf" || fail "Codex usage status is missing from the status bar"
 grep -q 'vim.opt.title = true' "$repo_root/nvim/lua/options.lua" || fail "Neovim terminal titles are disabled"
 grep -q 'vim.opt.titlestring' "$repo_root/nvim/lua/options.lua" || fail "Neovim filename title is missing"
 grep -q 'dw-status.sh' "$repo_root/tmux/tmux.conf" || fail "DW environment status is missing from the status bar"
@@ -674,8 +678,8 @@ assert_file "$XDG_CONFIG_HOME/tmux/tmux.conf"
 assert_file "$XDG_CONFIG_HOME/tmux/resource-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/git-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/program-name.sh"
-assert_file "$XDG_CONFIG_HOME/tmux/codex-status.sh"
-assert_file "$XDG_CONFIG_HOME/tmux/codex-usage.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/agent-status.sh"
+assert_file "$XDG_CONFIG_HOME/tmux/agent-usage.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/vercel-status.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/vercel-deploy-common.sh"
 assert_file "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh"
@@ -812,6 +816,8 @@ elif [[ "$1" == '-o' && "$2" == 'command=' ]]; then
     123) echo 'nvim --embed' ;;
     124) echo '/usr/bin/neovim --embed' ;;
     125) echo 'vim' ;;
+    460) echo 'claude --resume abc' ;;
+    461) echo 'node /opt/homebrew/lib/node_modules/@anthropic-ai/claude-code/cli.js' ;;
     777) echo '-zsh' ;;
     778) echo '/bin/zsh' ;;
     779) echo '/bin/bash' ;;
@@ -837,31 +843,31 @@ calls.write_text(str(int(calls.read_text()) + 1))
 print('80' if '--field' not in sys.argv else '80')
 EOF
 chmod +x "$usage_plugin/fetch_codex_usage.py"
-usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_CODEX_USAGE_CACHE_DIR="$usage_cache" CODEX_USAGE_CALLS="$usage_calls" TERM=xterm-256color LC_ALL=en_US.UTF-8 PATH="$fake_bin:$PATH")
-first_usage=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
-env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger
+usage_env=(TMUX_PLUGIN_MANAGER_PATH="$test_home/tmux-plugins" TMUX_AGENT_USAGE_CACHE_DIR="$usage_cache" CODEX_USAGE_CALLS="$usage_calls" TERM=xterm-256color LC_ALL=en_US.UTF-8 PATH="$fake_bin:$PATH")
+first_usage=$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456)
+env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" --trigger
 for _ in {1..40}; do
-  [[ -f "$usage_cache/usage" ]] && break
+  [[ -f "$usage_cache/codex" ]] && break
   sleep 0.05
 done
-assert_file "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m · wk 80% 1m |'
-colored_usage=$(env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456)
+assert_file "$usage_cache/codex"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m · wk 80% 1m |'
+colored_usage=$(env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456)
 ! grep -q 'bg=' <<<"${colored_usage%% |*}" || fail "progress indicator changed its background"
 grep -q 'fg=#' <<<"$colored_usage" || fail "progress indicator color missing"
 grep -q 'fg=colour250,nobold,nodim' <<<"$colored_usage" || fail "reset time is not light neutral"
 grep -q 'fg=colour255,bold,nodim' <<<"$colored_usage" || fail "reset time style was not restored"
 assert_output "$(cat "$usage_calls")" '4'
-printf '0 80 86400 80 43200\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1d · wk 80% 12h |'
-printf '0 80 3600 80 0\n' > "$usage_cache/usage"
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1h · wk 80% 0m |'
+printf '0 80 86400 80 43200\n' > "$usage_cache/codex"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1d · wk 80% 12h |'
+printf '0 80 3600 80 0\n' > "$usage_cache/codex"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1h · wk 80% 0m |'
 assert_output "$(cat "$usage_calls")" '4'
 
 usage_percentage() {
   local value="$1"
-  printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/usage"
-  env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
+  printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/codex"
+  env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 |
     sed -E 's/#\[[^]]*\]//g' | sed -E 's/^ 5h ([0-9]+%) 1m · wk [0-9]+% 1m \|$/\1/'
 }
 
@@ -880,45 +886,70 @@ done
 
 color_at() {
   local value="$1"
-  printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/usage"
-  env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
+  printf '0 %s 60 %s 60\n' "$value" "$value" > "$usage_cache/codex"
+  env -u NO_COLOR "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 |
     grep -o '\[fg=#[^,]*' | head -1 | sed 's/\[fg=//'
 }
 [[ "$(color_at 49)" != "$(color_at 50)" ]] || fail "color does not change continuously"
 [[ "$(color_at 50)" != "$(color_at 51)" ]] || fail "color does not change continuously"
 
-printf '0 80 60 80 60\n' > "$usage_cache/usage"
-no_color_output=$(NO_COLOR=1 env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 |
+printf '0 80 60 80 60\n' > "$usage_cache/codex"
+no_color_output=$(NO_COLOR=1 env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
 assert_output "$no_color_output" ' 5h 80% 1m · wk 80% 1m |'
-fallback_output=$(env "${usage_env[@]}" TERM=dumb NO_COLOR=1 "$repo_root/tmux/codex-usage.sh" 456 |
+fallback_output=$(env "${usage_env[@]}" TERM=dumb NO_COLOR=1 "$repo_root/tmux/agent-usage.sh" 456 |
   sed -E 's/#\[[^]]*\]//g')
 assert_output "$fallback_output" ' 5h 80% 1m · wk 80% 1m |'
-printf '0 -- 60 -- 60\n' > "$usage_cache/usage"
-unknown_output=$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g')
+printf '0 -- 60 -- 60\n' > "$usage_cache/codex"
+unknown_output=$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g')
 assert_output "$unknown_output" ' 5h ? · wk ? |'
-env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 >/dev/null
+env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 >/dev/null
 assert_output "$(cat "$usage_calls")" '4'
 for _ in {1..40}; do
-  [[ ! -d "$usage_cache/.refresh.lock" ]] && break
+  [[ ! -d "$usage_cache/.refresh-codex.lock" ]] && break
   sleep 0.05
 done
-env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" --trigger @2
+env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" --trigger @2
 for _ in {1..40}; do
   [[ "$(cat "$usage_calls")" == 8 ]] && break
   sleep 0.05
 done
-assert_file "$usage_cache/usage"
+assert_file "$usage_cache/codex"
 assert_output "$(cat "$usage_calls")" '8'
-env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 456 @2 >/dev/null
+env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 @2 >/dev/null
 assert_output "$(cat "$usage_calls")" '8'
-assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/codex-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ''
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 102 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ''
+cat > "$usage_plugin/fetch_claude_usage.py" <<'EOF'
+#!/usr/bin/env python3
+import sys
+import time
+
+assert '--raw' in sys.argv and 'claudeAiOauth' in sys.stdin.read()
+now = int(time.time())
+print(f'anthropic-ratelimit-unified-5h-reset: {now + 7230}')
+print('anthropic-ratelimit-unified-5h-utilization: 0.25')
+print(f'anthropic-ratelimit-unified-7d-reset: {now + 2 * 86400 + 30}')
+print('anthropic-ratelimit-unified-7d-utilization: 1.2')
+EOF
+mkdir -p "$HOME/.claude"
+printf '{"claudeAiOauth":{"accessToken":"test"}}\n' > "$HOME/.claude/.credentials.json"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 460 | sed -E 's/#\[[^]]*\]//g')" ' 5h ? · wk ? |'
+env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" --trigger claude
+for _ in {1..40}; do
+  [[ -f "$usage_cache/claude" ]] && break
+  sleep 0.05
+done
+assert_file "$usage_cache/claude"
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 460 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 75% 2h · wk 0% 2d |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 461 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 75% 2h · wk 0% 2d |'
+assert_output "$(env "${usage_env[@]}" "$repo_root/tmux/agent-usage.sh" 456 | sed -E 's/#\[[^]]*\]//g; s/  +/ /g')" ' 5h 80% 1m · wk 80% 1m |'
+rm -f "$HOME/.claude/.credentials.json"
 assert_output "$(PATH="$fake_bin:$PATH" resource_status_output)" ' CPU MEM '
 resource_status_raw=$(PATH="$fake_bin:$PATH" env -u TMUX "$repo_root/tmux/resource-status.sh")
 grep -Fq 'fg=colour186,bg=colour237,bold]CPU#[fg=colour255,bg=colour237,bold] ' <<<"$resource_status_raw" || fail "CPU color or readable label missing"
 grep -q 'fg=colour114,bg=colour237,bold]MEM ' <<<"$resource_status_raw" || fail "memory color or trailing spacing missing"
 grep -q 'bg=colour237,fg=colour255,bold]#\[default\]$' <<<"$resource_status_raw" || fail "resource status trailing reset missing"
-! grep -q 'bg=colour238' "$repo_root/tmux/codex-usage.sh" || fail "Codex usage still overrides the status background"
+! grep -q 'bg=colour238' "$repo_root/tmux/agent-usage.sh" || fail "Codex usage still overrides the status background"
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 123)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 124)" ''
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 125)" 'vim'
@@ -926,6 +957,9 @@ assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 456 "$git_repo" 'Second conversation')" 'Second conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 789 "$git_repo" "⠼ First conversation | ${git_repo##*/}")" 'First conversation'
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 999 "$git_repo")" 'Codex'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 460 "$git_repo" '✳ Extract data from dw.json')" 'Extract data from dw.json'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 461 "$git_repo" '⠐ Claude usage display')" 'Claude usage display'
+assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 460 "$git_repo" 'Claude Code')" 'Claude'
 directory_root="$test_home/code/work/projects/ikp-digi-wcp-custom-sfra"
 mkdir -p "$directory_root/src/components" "$test_home/code/customer-success-platform-v3.14" "$test_home/code/foo_bar_checkout_service/tests"
 assert_output "$(PATH="$fake_bin:$PATH" "$repo_root/tmux/program-name.sh" 777 "$directory_root")" 'sfra'
@@ -938,7 +972,7 @@ status_right=$(grep '^set -g status-right ' "$repo_root/tmux/tmux.conf")
 git_position=${status_right%%git-status.sh*}
 vercel_position=${status_right%%vercel-status.sh*}
 resource_position=${status_right%%resource-status.sh*}
-codex_position=${status_right%%codex-usage.sh*}
+codex_position=${status_right%%agent-usage.sh*}
 [[ "$resource_position" != "$status_right" && "$git_position" != "$status_right" && "$vercel_position" != "$status_right" && "$codex_position" != "$status_right" && ${#git_position} -lt ${#vercel_position} && ${#vercel_position} -lt ${#codex_position} && ${#codex_position} -lt ${#resource_position} ]] || fail "status bar ordering changed"
 grep -q 'vercel-status.sh' "$repo_root/tmux/tmux.conf" || fail "Vercel status is missing from the status bar"
 grep -q 'bg=#166534' "$repo_root/tmux/vercel-status.sh" || fail "ready Vercel status color is missing"
@@ -984,7 +1018,7 @@ if command -v nvim >/dev/null 2>&1; then
 fi
 
 "$repo_root/install" uninstall tmux --yes
-[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/codex-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/vercel-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-actions.py" ]] || fail "tmux uninstall failed"
+[[ ! -e "$XDG_CONFIG_HOME/tmux/tmux.conf" && ! -e "$XDG_CONFIG_HOME/tmux/resource-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/git-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/program-name.sh" && ! -e "$XDG_CONFIG_HOME/tmux/agent-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/agent-usage.sh" && ! -e "$XDG_CONFIG_HOME/tmux/vercel-status.sh" && ! -e "$XDG_CONFIG_HOME/tmux/easy-motion-default.sh" && ! -e "$XDG_CONFIG_HOME/tmux/smart-actions.py" ]] || fail "tmux uninstall failed"
 assert_file "$XDG_CONFIG_HOME/nvim/init.lua"
 "$repo_root/install" uninstall nvim --yes
 [[ ! -e "$XDG_CONFIG_HOME/nvim/init.lua" ]] || fail "nvim uninstall failed"

@@ -103,14 +103,36 @@ clean_codex_title() {
     title=${title%" | $pane_name"}
   fi
   # Codex uses this transient title while it updates the conversation name;
-  # codex-status.sh already exposes the active loading state in the status bar.
+  # agent-status.sh already exposes the active loading state in the status bar.
   [[ "$title" == 'renaming...' ]] && return 0
   [[ -n "$title" ]] && printf '%s' "$title"
+}
+
+is_claude_command() {
+  local command="$1" executable argument
+  executable=${command%%[[:space:]]*}
+  argument=${command#"$executable"}
+  argument=${argument#"${argument%%[![:space:]]*}"}
+  argument=${argument%%[[:space:]]*}
+  [[ "${executable##*/}" == claude || "${argument##*/}" == claude || "$command" == *@anthropic-ai/claude-code* ]]
+}
+
+clean_claude_title() {
+  local title
+  # Claude prefixes its conversation title with an idle mark or a spinner frame.
+  title=$(sed -E 's/^(✳|✶|✻|✽|✢|✺|\*|·|⠂|⠐|⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)[[:space:]]+//' <<<"$pane_title")
+  [[ -n "$title" && "$title" != 'Claude Code' ]] && printf '%s' "$title"
 }
 
 find_application() {
   local pid="$1" command child result cleaned_title
   command=$(process_command "$pid")
+
+  if is_claude_command "$command"; then
+    cleaned_title=$(clean_claude_title)
+    printf '__agent__%s\n' "${cleaned_title:-Claude}"
+    return 0
+  fi
 
   case "$command" in
     *[Cc]odex*)
@@ -152,8 +174,9 @@ find_application() {
 }
 
 label=$(find_application "$pane_pid")
-if [[ "$label" == __codex__* ]]; then
-  printf '%s\n' "${label#__codex__}" | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]+$//'
+if [[ "$label" == __codex__* || "$label" == __agent__* ]]; then
+  label=${label#__codex__}
+  printf '%s\n' "${label#__agent__}" | sed -E 's/[[:space:]]+/ /g; s/[[:space:]]+$//'
 elif [[ "$label" == __nvim__* ]]; then
   printf '%s\n' "${label#__nvim__}"
 elif is_shell_label "$label" && [[ -n "$pane_path" ]]; then
