@@ -20,8 +20,9 @@ dotfiles install nvim
 dotfiles install
 dotfiles install mpv
 dotfiles install dw
+dotfiles install keyboard
 dotfiles update [tmux|btop|nvim|mpv]
-dotfiles uninstall [tmux|btop|nvim|mpv|dw]
+dotfiles uninstall [tmux|btop|nvim|mpv|dw|keyboard]
 dotfiles --dry-run
 ```
 
@@ -192,3 +193,16 @@ maximized, and does not resize it when changing between videos.
 Run `course` to enter the last course you watched under `~/Documents/Courses`
 (or `$COURSE_DIR`) and launch its recursive mpv playlist. On the first run, it
 uses the most recently modified course directory; deleted courses are skipped.
+
+## Keyboard key swap (macOS)
+
+```bash
+dotfiles install keyboard --yes
+```
+
+Swaps `` ` `` and Escape on the compact Bluetooth keyboard (`VendorID 0xa5c`,
+`ProductID 0x8503`), so Escape no longer needs fn+shift+`` ` ``. Other keyboards,
+including the built-in one, are unchanged. The global `hidutil` mapping is
+ignored by this keyboard's driver, so the `com.dotfiles.keyremap` LaunchAgent
+applies it to the device and re-applies it whenever the keyboard reconnects.
+Set `KEYREMAP_DEVICE` to target another keyboard (IDs from `hidutil list`).

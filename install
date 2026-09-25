@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Independent zsh, tmux, DW, Neovim, and mpv configuration installer for macOS and Linux.
+# Independent zsh, tmux, DW, Neovim, mpv, and keyboard configuration installer for macOS and Linux.
 set -euo pipefail
 
 script_dir=$(cd -P "$(dirname "$0")" && pwd)
@@ -21,6 +21,8 @@ zsh_marker="$config_root/zsh/.dotfiles-zsh-managed"
 mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
 dw_marker="$HOME/.local/bin/.dotfiles-dw-managed"
+keyboard_marker="$config_root/.dotfiles-keyboard-managed"
+keyboard_agent="$HOME/Library/LaunchAgents/com.dotfiles.keyremap.plist"
 tmux_files=(tmux.conf status-layout.sh resource-status.sh git-status.sh dw-status.sh vercel-status.sh vercel-deploy-common.sh program-name.sh agent-status.sh agent-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py patch-easy-motion.sh)
 btop_files=(btop.conf)
 zsh_files=(path-navigation.zsh)
@@ -29,10 +31,10 @@ nvim_files=(init.lua nvim-pack-lock.json lua/options.lua lua/plugins.lua lua/lsp
 
 usage() {
   cat <<'EOF'
-  dotfiles — independent zsh, tmux, btop, Neovim, mpv, and course launcher configuration
+  dotfiles — independent zsh, tmux, btop, Neovim, mpv, course launcher, and keyboard configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course|dw] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course|dw|keyboard] [--yes] [--dry-run]
 
 Actions:
   install       Install all configured components (default)
@@ -204,6 +206,36 @@ install_dw() {
   fi
   printf 'dotfiles manages ~/.local/bin/dw.\n' > "$dw_marker"
   echo "  DW launcher installed (backup: $backup)"
+}
+
+launch_agent() {
+  [[ "$(printenv DOTFILES_SKIP_LAUNCHCTL || true)" == true ]] && return 0
+  local verb="$1" plist="$2" label
+  label=$(basename "$plist" .plist)
+  launchctl bootout "gui/$(id -u)/$label" 2>/dev/null || true
+  [[ "$verb" == load ]] && launchctl bootstrap "gui/$(id -u)" "$plist"
+  return 0
+}
+
+install_keyboard() {
+  selected keyboard || return 0
+  if [[ "$os" != Darwin ]]; then
+    [[ "$component" == keyboard ]] && die "The keyboard component is macOS only"
+    return 0
+  fi
+  [[ -f "$repo_dir/keyboard/keyremap" ]] || die "Invalid keyboard component in checkout"
+  local backup="$HOME/.local/bin/keyremap.backup.$(date +%s)" legacy="$HOME/Library/LaunchAgents/com.local.keyremap.plist"
+  if [[ "$dry_run" == true ]]; then echo "  Would install the \` ↔ Escape key swap LaunchAgent into $keyboard_agent"; return; fi
+  if [[ -f "$legacy" ]]; then launch_agent unload "$legacy"; rm -f "$legacy"; fi
+  copy_file "$repo_dir/keyboard/keyremap" "$HOME/.local/bin/keyremap" "$backup"
+  chmod +x "$HOME/.local/bin/keyremap"
+  mkdir -p "$(dirname "$keyboard_agent")"
+  sed "s|__HOME__|$HOME|g" "$repo_dir/keyboard/com.dotfiles.keyremap.plist" > "$keyboard_agent"
+  rm -f "${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/keyremap-devices"
+  launch_agent load "$keyboard_agent"
+  mkdir -p "$config_root"
+  printf 'dotfiles manages ~/.local/bin/keyremap and com.dotfiles.keyremap.plist.\n' > "$keyboard_marker"
+  echo "  keyboard key swap installed (backup: $backup)"
 }
 
 install_language_servers() {
@@ -420,6 +452,16 @@ uninstall_component() {
     echo "  Removed course launcher (backup: $course_backup)"
     return
   fi
+  if [[ "$kind" == keyboard ]]; then
+    [[ -f "$keyboard_marker" ]] || { echo "  keyboard is not managed; nothing removed."; return; }
+    confirm "Remove managed keyboard key swap?" || return
+    if [[ "$dry_run" == true ]]; then echo "  Would remove $keyboard_agent and ~/.local/bin/keyremap"; return; fi
+    launch_agent unload "$keyboard_agent"
+    [[ "$(printenv DOTFILES_SKIP_LAUNCHCTL || true)" == true ]] || "$HOME/.local/bin/keyremap" --reset || true
+    rm -f "$keyboard_agent" "$HOME/.local/bin/keyremap" "$keyboard_marker"
+    echo "  Removed keyboard key swap"
+    return
+  fi
   if [[ "$kind" == dw ]]; then
     [[ -f "$dw_marker" ]] || { echo "  dw is not managed; nothing removed."; return; }
     confirm "Remove managed DW launcher?" || return
@@ -476,7 +518,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      zsh|tmux|btop|nvim|mpv|course|dw) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      zsh|tmux|btop|nvim|mpv|course|dw|keyboard) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -491,7 +533,7 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; selected dw && uninstall_component dw; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; selected dw && uninstall_component dw; selected keyboard && uninstall_component keyboard; exit 0; fi
 install_packages "$os"
 install_zsh
 check_nvim
@@ -503,4 +545,5 @@ install_language_servers
 install_mpv
 install_course
 install_dw
+install_keyboard
 echo "dotfiles $action complete."

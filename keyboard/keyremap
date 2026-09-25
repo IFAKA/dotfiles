@@ -1,0 +1,24 @@
+#!/usr/bin/env bash
+# Swap ` and Escape on the compact Bluetooth keyboard (macOS).
+# The global hidutil mapping is ignored by this keyboard's driver, so the
+# mapping is applied to the device itself and re-applied whenever it reconnects.
+set -euo pipefail
+
+default_device='{"VendorID":0xa5c,"ProductID":0x8503}'
+device="${KEYREMAP_DEVICE:-$default_device}"
+mapping='{"UserKeyMapping":[{"HIDKeyboardModifierMappingSrc":0x700000035,"HIDKeyboardModifierMappingDst":0x700000029},{"HIDKeyboardModifierMappingSrc":0x700000029,"HIDKeyboardModifierMappingDst":0x700000035}]}'
+state="${XDG_STATE_HOME:-$HOME/.local/state}/dotfiles/keyremap-devices"
+
+if [[ "${1:-}" == --reset ]]; then
+  hidutil property --matching "$device" --set '{"UserKeyMapping":[]}' >/dev/null
+  rm -f "$state"
+  exit 0
+fi
+
+# Registry IDs change when the keyboard reconnects; only then is the mapping re-applied.
+devices=$(hidutil list --matching "$device" 2>/dev/null | awk '$6 ~ /^0x/ { print $6 }' | sort)
+[[ -n "$devices" ]] || exit 0
+[[ "$devices" != "$(cat "$state" 2>/dev/null || true)" ]] || exit 0
+hidutil property --matching "$device" --set "$mapping" >/dev/null
+mkdir -p "$(dirname "$state")"
+printf '%s\n' "$devices" > "$state"

@@ -559,7 +559,7 @@ assert apk.action == "open", apk
 assert module.open_command(apk, None) == ["open", "-R", "artifacts/walkback-debug.apk"], module.open_command(apk, None)
 PY
 help=$("$repo_root/install" --help)
-grep -q 'zsh|tmux|btop|nvim|mpv|course|dw' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|btop|nvim|mpv|course|dw|keyboard' <<<"$help" || fail "help output"
 
 dw_project="$test_home/dw-project"
 printf '%s\n' '{"hostname":"dev.example.test","username":"user","password":"dev-secret","nested":{"password":"nested-secret"}}' > "$dw_project/dw.dev.json"
@@ -586,6 +586,15 @@ assert_file "$test_home/.local/bin/.dotfiles-dw-managed"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"
+
+if [[ "$(uname -s)" == Darwin ]]; then
+  DOTFILES_SKIP_LAUNCHCTL=true "$repo_root/install" install keyboard --yes
+  assert_file "$test_home/.local/bin/keyremap"
+  grep -qF "$test_home/.local/bin/keyremap" "$test_home/Library/LaunchAgents/com.dotfiles.keyremap.plist" || fail "keyboard LaunchAgent does not point at keyremap"
+  DOTFILES_SKIP_LAUNCHCTL=true "$repo_root/install" uninstall keyboard --yes
+  [[ ! -e "$test_home/.local/bin/keyremap" && ! -e "$test_home/Library/LaunchAgents/com.dotfiles.keyremap.plist" ]] || fail "keyboard uninstall failed"
+fi
+
 dry_run=$(PATH="$test_home/minimal-bin:/usr/bin:/bin" DOTFILES_SKIP_PACKAGES=false DOTFILES_SKIP_TMUX_PLUGINS=false "$repo_root/install" install tmux --dry-run 2>&1)
 grep -q 'lazygit' <<<"$dry_run" || fail "tmux dry-run does not provision lazygit"
 grep -q 'btop' <<<"$dry_run" || fail "tmux dry-run does not provision btop"
