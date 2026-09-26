@@ -9,7 +9,7 @@ if [[ -f "$state_file" ]]; then
   last_course=$(<"$state_file")
   if [[ -d "$last_course" && "$last_course" == "$course_dir"/* ]]; then
     cd "$last_course"
-    exec mpv
+    exec open -a /Applications/mpv.app --args "$PWD"
   fi
 fi
 
@@ -31,4 +31,4 @@ done < <(find "$course_dir" -mindepth 1 -maxdepth 1 -type d -print0)
 mkdir -p "$(dirname "$state_file")"
 printf '%s\n' "$latest_dir" > "$state_file"
 cd "$latest_dir"
-exec mpv
+exec open -a /Applications/mpv.app --args "$PWD"

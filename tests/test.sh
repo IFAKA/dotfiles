@@ -655,7 +655,13 @@ cat > "$fake_mpv_bin/mpv" <<'EOF'
 printf '%s\n' "$@" > "${MPV_ARGS_FILE:?}"
 printf '%s\n' "$PWD" > "${MPV_PWD_FILE:-/dev/null}"
 EOF
+cat > "$fake_mpv_bin/open" <<'EOF'
+#!/usr/bin/env bash
+printf '%s\n' "$@" > "${MPV_ARGS_FILE:?}"
+printf '%s\n' "$PWD" > "${MPV_PWD_FILE:-/dev/null}"
+EOF
 chmod +x "$fake_mpv_bin/mpv"
+chmod +x "$fake_mpv_bin/open"
 "$repo_root/install" install mpv --yes
 assert_file "$XDG_CONFIG_HOME/mpv/mpv.conf"
 assert_file "$test_home/.local/bin/mpv"
@@ -672,6 +678,10 @@ assert_file "$test_home/.local/bin/course"
 rm -f "$test_home/mpv-args" "$test_home/mpv-pwd"
 (PATH="$fake_mpv_bin:$PATH" COURSE_DIR="$test_home/Courses" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PWD_FILE="$test_home/mpv-pwd" "$test_home/.local/bin/course")
 grep -qxF "$test_home/Courses/New Course" "$test_home/mpv-pwd" || fail "course did not launch mpv in the latest course"
+grep -qxF -- '-a' "$test_home/mpv-args" || fail "course did not launch mpv as a macOS app"
+grep -qxF -- '/Applications/mpv.app' "$test_home/mpv-args" || fail "course did not select the mpv app"
+grep -qxF -- '--args' "$test_home/mpv-args" || fail "course did not pass arguments to the mpv app"
+grep -qxF -- "$test_home/Courses/New Course" "$test_home/mpv-args" || fail "course did not open the course directory"
 touch -t 202601010000 "$test_home/Courses/Old Course"
 rm -f "$test_home/mpv-pwd"
 (PATH="$fake_mpv_bin:$PATH" COURSE_DIR="$test_home/Courses" MPV_ARGS_FILE="$test_home/mpv-args" MPV_PWD_FILE="$test_home/mpv-pwd" "$test_home/.local/bin/course")
