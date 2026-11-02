@@ -206,3 +206,11 @@ including the built-in one, are unchanged. The global `hidutil` mapping is
 ignored by this keyboard's driver, so the `com.dotfiles.keyremap` LaunchAgent
 applies it to the device and re-applies it whenever the keyboard reconnects.
 Set `KEYREMAP_DEVICE` to target another keyboard (IDs from `hidutil list`).
+
+---
+
+## Support
+
+If this project is useful to you, you can support my work:
+
+[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/zfaka)
