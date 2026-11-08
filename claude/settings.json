@@ -1,0 +1,21 @@
+{
+  "env": { "CLAUDE_CODE_SUBAGENT_MODEL": "sonnet" },
+  "attribution": { "commit": "", "pr": "" },
+  "model": "sonnet",
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{ "type": "command", "command": "python3 -I ~/.claude/bin/main_guard.py", "timeout": 10 }] },
+      { "matcher": "Edit|Write|NotebookEdit|Bash", "hooks": [{ "type": "command", "command": "python3 -I ~/.claude/bin/claims.py", "timeout": 10 }] },
+      { "matcher": "Edit|Write|NotebookEdit|Bash|SendMessage", "hooks": [{ "type": "command", "command": "python3 -I ~/.claude/bin/coord.py", "timeout": 15 }] }
+    ],
+    "SessionStart": [
+      { "hooks": [{ "type": "command", "command": "python3 -I ~/.claude/bin/pane_session.py record", "timeout": 10 }] }
+    ],
+    "SessionEnd": [
+      { "hooks": [
+        { "type": "command", "command": "python3 -I ~/.claude/bin/claims.py release", "timeout": 10 },
+        { "type": "command", "command": "python3 -I ~/.claude/bin/pane_session.py forget", "timeout": 10 }
+      ] }
+    ]
+  }
+}

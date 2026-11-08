@@ -47,17 +47,11 @@ request_usage_refresh() {
   nohup bash "$usage_script" --trigger "$agent" >/dev/null 2>&1 &
 }
 
-print_loading_marquee() {
-  # Show one cell at a time from the compact FAKA sequence.
-  local marquee='⠟⠁⠮⠵⠗⠪⠮⠵' viewport_width=1 marquee_end
-  marquee_end=$(( ${#marquee} - viewport_width ))
-  if (( marquee_tick >= 0 )); then
-    printf ' %s\n' "${marquee:frame:viewport_width}"
-    frame=$(( (frame + 1) % (marquee_end + 1) ))
-    marquee_tick=0
-  else
-    marquee_tick=$((marquee_tick + 1))
-  fi
+print_loading_spinner() {
+  # One braille spinner cell; the refresh watcher advances it.
+  local -a frames=(⠋ ⠙ ⠹ ⠸ ⠼ ⠴ ⠦ ⠧ ⠇ ⠏)
+  printf ' %s\n' "${frames[frame % ${#frames[@]}]}"
+  frame=$(( (frame + 1) % ${#frames[@]} ))
   write_state
   start_refresh_watcher
 }
@@ -182,6 +176,10 @@ claude_state() {
   # While a turn runs, the footer offers to interrupt and a spinner line such
   # as "✽ Proofing… (46s)" sits above the prompt; narrow panes may cut the hint.
   elif grep -Eiq 'esc to interrupt' <<<"$footer" ||
+    # Subagents, forks and background tasks keep running after the main prompt
+    # looks idle; the footer lists them and the pane title keeps a braille frame.
+    grep -Eiq '[0-9]+[[:space:]]+(local[[:space:]]+|background[[:space:]]+)?(agents?|forks?|tasks?|shells?|monitors?)\b|(agents?|tasks?|shells?)[^[:cntrl:]]*to manage' <<<"$(tail -n 4 <<<"$screen")" ||
+    grep -Eq '^(⠂|⠐|⠋|⠙|⠹|⠸|⠼|⠴|⠦|⠧|⠇|⠏)' <<<"$(tmux display-message -p -t "$pane_id" '#{pane_title}' 2>/dev/null)" ||
     grep -Eq '^[[:space:]]*[^[:space:][:alnum:]][[:space:]]+[[:alpha:]][[:alpha:] -]*…' <<<"$footer"; then
     echo busy
   elif grep -Eq '^[[:space:]]*❯' <<<"$footer"; then
@@ -204,7 +202,7 @@ case "$("${agent}_state")" in
     # visible while the user is composing a prompt.
     action_required=0
     if [[ "$busy" == 1 ]]; then
-      print_loading_marquee
+      print_loading_spinner
     else
       printf ' ✦\n'
     fi
@@ -213,10 +211,9 @@ case "$("${agent}_state")" in
     action_required=0
     if [[ "$busy" != 1 ]]; then
       frame=0
-      marquee_tick=0
     fi
     busy=1
-    print_loading_marquee
+    print_loading_spinner
     ;;
   idle)
     action_required=0

@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+# lane: one worktree + branch per Claude session. lane new NAME | ls | land | drop NAME
+set -euo pipefail
+top=$(git rev-parse --show-toplevel); common=$(cd "$top" && git rev-parse --git-common-dir); common=$(cd "$top" && cd "$common" && pwd)
+main=$(dirname "$common"); base=$(git -C "$main" symbolic-ref --short HEAD)
+root="$(dirname "$main")/.lanes/$(basename "$main")"
+case "${1:-ls}" in
+ new) n=${2:?name}; "$0" gc >/dev/null 2>&1 || true  # clean finished lanes first
+  git -C "$main" worktree add -b "lane/$n" "$root/$n" "$base" >/dev/null && echo "$root/$n   (cd there; branch lane/$n from $base)";;
+ ls)  git -C "$main" worktree list; ls "$common/claims" 2>/dev/null | wc -l | xargs echo "claims:";;
+ land) # rebase this lane on the base branch, then fast-forward the base. Serialized by a lock.
+  b=$(git symbolic-ref --short HEAD); [[ $b != "$base" && "$top" != "$main" ]] || { echo "run from a worktree branch, not the base"; exit 1; }
+  [[ -z $(git status --porcelain --untracked-files=no) ]] || { echo "commit your changes first"; exit 1; }
+  lock="$common/land.lock"; until mkdir "$lock" 2>/dev/null; do sleep 2; done; trap 'rmdir "$lock"' EXIT
+  mb=$(git merge-base "$base" HEAD)  # overlap report: what landed on base since this lane started, in files this lane touched
+  mine=$(git diff --name-only "$mb" HEAD)
+  if [[ -n $mine && $(git rev-list --count "$mb..$base") -gt 0 ]]; then
+    ov=$(echo "$mine" | xargs git log --format='  %h %s (%an)' "$mb..$base" -- 2>/dev/null)
+    [[ -n $ov ]] && { echo "OVERLAP: landed on $base since you started, in files you changed:"; echo "$ov"; echo "$mine" | xargs git diff --stat "$mb" "$base" -- | sed 's/^/  /'; }
+  fi
+  git rebase "$base" || { echo "CONFLICT: resolve (git rebase --continue), rerun checks, then lane land again"; exit 1; }
+  chk=$(git config lane.check || true)
+  if [[ -n $chk ]]; then echo "check after rebase: $chk"; (cd "$top" && eval "$chk") || { echo "CHECK FAILED: fix in the lane, commit, lane land again"; exit 1; }; fi
+  [[ -z $(git -C "$main" status --porcelain --untracked-files=no) ]] || { echo "base tree $main has uncommitted edits (another session); ask the user"; exit 1; }
+  git -C "$main" merge --ff-only "$b" && echo "landed $b on $base (when done with this lane, run: lane drop ${b#lane/}; lane gc drops all merged idle lanes)";;
+ drop) n=${2:?name}; git -C "$main" worktree remove "$root/$n" && git -C "$main" branch -d "lane/$n";;
+ gc) # drop every merged lane that no process sits in and that has no edits (never touches a lane in use)
+  busy=$(lsof -d cwd -Fn 2>/dev/null | sed -n "s|^n||p" | grep -F "$root/" || true); k=0
+  for b in $(git -C "$main" branch --merged "$base" --list "lane/*" | tr -d " *+"); do n=${b#lane/}; [[ -d $root/$n ]] || continue
+   [[ -n $(find "$root/$n/.git" -maxdepth 0 -mtime +0 2>/dev/null) ]] || continue  # younger than a day: maybe a fresh lane (no commits looks merged)
+   grep -q "^$root/$n\(/\|$\)" <<<"$busy" && continue
+   # untracked paths that are only generated output (not work) do not count as edits; any other dirt keeps the lane
+   [[ -z $(git -C "$root/$n" status --porcelain 2>/dev/null | grep -v -E '^\?\? (sound/tell/|.*build/)$') ]] || continue
+   git -C "$main" worktree remove --force "$root/$n" 2>/dev/null && git -C "$main" branch -d "$b" >/dev/null 2>&1 && k=$((k+1)); done; echo "dropped $k merged lanes";;
+ *) echo "usage: lane new NAME | ls | land | drop NAME | gc"; exit 2;;
+esac

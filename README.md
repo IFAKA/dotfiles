@@ -21,8 +21,9 @@ dotfiles install
 dotfiles install mpv
 dotfiles install dw
 dotfiles install keyboard
+dotfiles install claude   # Claude Code setup: CLAUDE.md, agents, rules, skills, lane/hooks
 dotfiles update [tmux|btop|nvim|mpv]
-dotfiles uninstall [tmux|btop|nvim|mpv|dw|keyboard]
+dotfiles uninstall [tmux|btop|nvim|mpv|dw|keyboard|claude]
 dotfiles --dry-run
 ```
 
@@ -207,10 +208,20 @@ ignored by this keyboard's driver, so the `com.dotfiles.keyremap` LaunchAgent
 applies it to the device and re-applies it whenever the keyboard reconnects.
 Set `KEYREMAP_DEVICE` to target another keyboard (IDs from `hidutil list`).
 
----
+## Claude Code setup
+
+`dotfiles install claude` copies `claude/` into `~/.claude`: `CLAUDE.md`, the
+`reader` agent, rules, skills, and the `lane`/session hooks (`bin/`). Files you
+already have are backed up to `~/.claude/dotfiles-backup.*`. `settings.json` is
+merged, never replaced: missing keys and hooks are added, your values stay.
+Personal files (`me.md`, memory, history) are not part of it.
+
+## Agent status icon
+
+The tmux window tab shows a braille spinner while Codex or Claude works. It
+also spins while Claude runs subagents, forks or background tasks, even when
+the main prompt looks idle.
 
 ## Support
 
-If this project is useful to you, you can support my work:
-
-[![Support me on Ko-fi](https://ko-fi.com/img/githubbutton_sm.svg)](https://ko-fi.com/zfaka)
+If this project helps you, you can support it on Ko-fi: https://ko-fi.com/zfaka

@@ -559,7 +559,7 @@ assert apk.action == "open", apk
 assert module.open_command(apk, None) == ["open", "-R", "artifacts/walkback-debug.apk"], module.open_command(apk, None)
 PY
 help=$("$repo_root/install" --help)
-grep -q 'zsh|tmux|btop|nvim|mpv|course|dw|keyboard' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|btop|nvim|mpv|course|dw|keyboard|claude' <<<"$help" || fail "help output"
 
 dw_project="$test_home/dw-project"
 printf '%s\n' '{"hostname":"dev.example.test","username":"user","password":"dev-secret","nested":{"password":"nested-secret"}}' > "$dw_project/dw.dev.json"
@@ -583,6 +583,28 @@ assert_file "$test_home/.local/bin/.dotfiles-dw-managed"
 [[ ! -e "$test_home/.local/bin/dw" ]] || fail "DW uninstall failed"
 [[ ! -e "$test_home/.local/bin/dw-setup.js" ]] || fail "DW setup helper uninstall failed"
 [[ ! -e "$test_home/.local/bin/dw-sandbox" ]] || fail "DW sandbox helper uninstall failed"
+
+claude_home="$test_home/claude-home"
+mkdir -p "$claude_home"
+printf '%s\n' '{"model":"opus","hooks":{"Stop":[{"hooks":[{"type":"command","command":"mine"}]}]}}' > "$claude_home/settings.json"
+CLAUDE_CONFIG_DIR="$claude_home" "$repo_root/install" install claude --yes
+assert_file "$claude_home/CLAUDE.md"
+assert_file "$claude_home/agents/reader.md"
+assert_file "$claude_home/bin/lane"
+python3 -I - "$claude_home/settings.json" <<'PY'
+import json, sys
+s = json.load(open(sys.argv[1]))
+assert s["model"] == "opus", s["model"]
+assert s["env"]["CLAUDE_CODE_SUBAGENT_MODEL"] == "sonnet"
+assert s["hooks"]["Stop"][0]["hooks"][0]["command"] == "mine"
+assert len(s["hooks"]["PreToolUse"]) == 3, s["hooks"]["PreToolUse"]
+PY
+CLAUDE_CONFIG_DIR="$claude_home" "$repo_root/install" install claude --yes
+assert_output "$(grep -c main_guard "$claude_home/settings.json")" 1
+CLAUDE_CONFIG_DIR="$claude_home" "$repo_root/install" uninstall claude --yes
+[[ ! -e "$claude_home/CLAUDE.md" && ! -e "$claude_home/bin/lane" ]] || fail "claude uninstall left files"
+if grep -q main_guard "$claude_home/settings.json"; then fail "claude uninstall left hooks"; fi
+grep -q '"mine"' "$claude_home/settings.json" || fail "claude uninstall removed user hooks"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"

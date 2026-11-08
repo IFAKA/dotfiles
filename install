@@ -22,6 +22,8 @@ mpv_marker="$config_root/mpv/.dotfiles-mpv-managed"
 course_marker="$config_root/.dotfiles-course-managed"
 dw_marker="$HOME/.local/bin/.dotfiles-dw-managed"
 keyboard_marker="$config_root/.dotfiles-keyboard-managed"
+claude_root="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+claude_marker="$claude_root/.dotfiles-claude-managed"
 keyboard_agent="$HOME/Library/LaunchAgents/com.dotfiles.keyremap.plist"
 tmux_files=(tmux.conf status-layout.sh resource-status.sh git-status.sh dw-status.sh vercel-status.sh vercel-deploy-common.sh program-name.sh agent-status.sh agent-usage.sh easy-motion-default.sh resource-monitor.sh smart-actions.py patch-easy-motion.sh)
 btop_files=(btop.conf)
@@ -34,7 +36,7 @@ usage() {
   dotfiles — independent zsh, tmux, btop, Neovim, mpv, course launcher, and keyboard configuration
 
 Usage:
-  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course|dw|keyboard] [--yes] [--dry-run]
+  dotfiles [install|update|uninstall] [zsh|tmux|btop|nvim|mpv|course|dw|keyboard|claude] [--yes] [--dry-run]
 
 Actions:
   install       Install all configured components (default)
@@ -236,6 +238,65 @@ install_keyboard() {
   mkdir -p "$config_root"
   printf 'dotfiles manages ~/.local/bin/keyremap and com.dotfiles.keyremap.plist.\n' > "$keyboard_marker"
   echo "  keyboard key swap installed (backup: $backup)"
+}
+
+# Merge claude/settings.json into the user's settings: add missing keys and
+# hook commands, never overwrite a value the user already set.
+claude_settings() {
+  python3 -I - "$1" "$2" "$3" <<'PY'
+import json, os, sys
+action, template, target = sys.argv[1:4]
+tpl = json.load(open(template))
+cur = json.load(open(target)) if os.path.exists(target) else {}
+ours = {h["command"] for es in tpl["hooks"].values() for e in es for h in e["hooks"]}
+if action == "install":
+    for k, v in tpl.items():
+        if k == "hooks":
+            continue
+        if isinstance(v, dict):
+            cur.setdefault(k, {})
+            for kk, vv in v.items():
+                cur[k].setdefault(kk, vv)
+        else:
+            cur.setdefault(k, v)
+    hooks = cur.setdefault("hooks", {})
+    for ev, entries in tpl["hooks"].items():
+        have = {h.get("command") for e in hooks.get(ev, []) for h in e.get("hooks", [])}
+        for e in entries:
+            if not all(h["command"] in have for h in e["hooks"]):
+                hooks.setdefault(ev, []).append(e)
+else:
+    for ev in list(cur.get("hooks", {})):
+        for e in cur["hooks"][ev]:
+            e["hooks"] = [h for h in e.get("hooks", []) if h.get("command") not in ours]
+        cur["hooks"][ev] = [e for e in cur["hooks"][ev] if e["hooks"]]
+        if not cur["hooks"][ev]:
+            del cur["hooks"][ev]
+    if not cur.get("hooks"):
+        cur.pop("hooks", None)
+os.makedirs(os.path.dirname(target), exist_ok=True)
+json.dump(cur, open(target, "w"), indent=2)
+PY
+}
+
+install_claude() {
+  selected claude || return 0
+  [[ -f "$repo_dir/claude/CLAUDE.md" && -f "$repo_dir/claude/settings.json" ]] || die "Invalid claude component in checkout"
+  local backup="$claude_root/dotfiles-backup.$(date +%s)" rel dest
+  if [[ "$dry_run" == true ]]; then echo "  Would install the Claude setup (CLAUDE.md, agents, rules, skills, hooks) into $claude_root"; return; fi
+  : > "$claude_marker.new"
+  while IFS= read -r rel; do
+    dest="$claude_root/$rel"
+    if [[ -f "$dest" ]] && ! cmp -s "$repo_dir/claude/$rel" "$dest"; then
+      mkdir -p "$(dirname "$backup/$rel")"; cp -p "$dest" "$backup/$rel"
+    fi
+    mkdir -p "$(dirname "$dest")"; cp -p "$repo_dir/claude/$rel" "$dest"
+    echo "$rel" >> "$claude_marker.new"
+  done < <(cd "$repo_dir/claude" && find . -type f ! -name settings.json ! -name .DS_Store | sed 's|^\./||' | sort)
+  [[ -f "$claude_root/settings.json" ]] && { mkdir -p "$backup"; cp -p "$claude_root/settings.json" "$backup/settings.json"; }
+  claude_settings install "$repo_dir/claude/settings.json" "$claude_root/settings.json"
+  mv "$claude_marker.new" "$claude_marker"
+  echo "  Claude setup installed into $claude_root (backup: $backup)"
 }
 
 install_language_servers() {
@@ -452,6 +513,18 @@ uninstall_component() {
     echo "  Removed course launcher (backup: $course_backup)"
     return
   fi
+  if [[ "$kind" == claude ]]; then
+    [[ -f "$claude_marker" ]] || { echo "  claude is not managed; nothing removed."; return; }
+    confirm "Remove the managed Claude setup files and hooks?" || return
+    if [[ "$dry_run" == true ]]; then echo "  Would remove managed files from $claude_root"; return; fi
+    local rel
+    while IFS= read -r rel; do rm -f "$claude_root/$rel"; done < "$claude_marker"
+    [[ -f "$claude_root/settings.json" ]] && claude_settings uninstall "$repo_dir/claude/settings.json" "$claude_root/settings.json"
+    rm -f "$claude_marker"
+    find "$claude_root/skills" "$claude_root/bin" "$claude_root/agents" "$claude_root/rules" -depth -type d -empty -delete 2>/dev/null || true
+    echo "  Removed Claude setup (settings values you may want are left in place)"
+    return
+  fi
   if [[ "$kind" == keyboard ]]; then
     [[ -f "$keyboard_marker" ]] || { echo "  keyboard is not managed; nothing removed."; return; }
     confirm "Remove managed keyboard key swap?" || return
@@ -518,7 +591,7 @@ parse_args() {
   for arg in "$@"; do
     case "$arg" in
       install|update|uninstall) action="$arg" ;;
-      zsh|tmux|btop|nvim|mpv|course|dw|keyboard) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
+      zsh|tmux|btop|nvim|mpv|course|dw|keyboard|claude) [[ "$component" == all ]] || die "Choose only one component"; component="$arg" ;;
       -y|--yes) yes=true ;;
       --dry-run) dry_run=true ;;
       -h|--help) usage; exit 0 ;;
@@ -533,7 +606,7 @@ parse_args "$@"
 os=$(uname -s)
 [[ "$os" == Darwin || "$os" == Linux ]] || die "Unsupported OS: $os"
 if [[ "$action" == update ]]; then update_checkout; fi
-if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; selected dw && uninstall_component dw; selected keyboard && uninstall_component keyboard; exit 0; fi
+if [[ "$action" == uninstall ]]; then selected zsh && uninstall_component zsh; selected nvim && uninstall_component nvim; selected tmux && uninstall_component tmux; selected btop && uninstall_component btop; selected mpv && uninstall_component mpv; selected course && uninstall_component course; selected dw && uninstall_component dw; selected keyboard && uninstall_component keyboard; selected claude && uninstall_component claude; exit 0; fi
 install_packages "$os"
 install_zsh
 check_nvim
@@ -546,4 +619,5 @@ install_mpv
 install_course
 install_dw
 install_keyboard
+install_claude
 echo "dotfiles $action complete."
