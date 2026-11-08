@@ -1,0 +1,7 @@
+# Hostnames blackholed in /etc/hosts by `dotfiles install privacy`.
+# Government-cloud endpoints embedded in the Claude Code binary.
+api.aws.hci.ic.gov
+api.aws.ic.gov
+c2s.ic.gov
+csp.hci.ic.gov
+sc2s.sgov.gov

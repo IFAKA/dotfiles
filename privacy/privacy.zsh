@@ -1,0 +1,7 @@
+# Telemetry opt-outs managed by dotfiles (privacy component).
+export DO_NOT_TRACK=1
+export HOMEBREW_NO_ANALYTICS=1
+export NEXT_TELEMETRY_DISABLED=1
+export DISABLE_TELEMETRY=1
+export DISABLE_ERROR_REPORTING=1
+export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1

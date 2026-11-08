@@ -5,7 +5,7 @@ repo_root=$(cd "$(dirname "$0")/.." && pwd)
 test_home=$(mktemp -d /tmp/dotfiles-test.XXXXXX)
 trap 'rm -rf "$test_home"' EXIT
 export HOME="$test_home" XDG_CONFIG_HOME="$test_home/.config" XDG_DATA_HOME="$test_home/.local/share"
-export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true DOTFILES_SKIP_TMUX_PLUGINS=true
+export DOTFILES_REPO_DIR="$repo_root" DOTFILES_SKIP_PACKAGES=true DOTFILES_SKIP_TMUX_PLUGINS=true DOTFILES_HOSTS_FILE="$test_home/hosts"
 
 fail() { echo "FAIL: $*" >&2; exit 1; }
 assert_file() { [[ -f "$1" ]] || fail "missing file: $1"; }
@@ -559,7 +559,7 @@ assert apk.action == "open", apk
 assert module.open_command(apk, None) == ["open", "-R", "artifacts/walkback-debug.apk"], module.open_command(apk, None)
 PY
 help=$("$repo_root/install" --help)
-grep -q 'zsh|tmux|btop|nvim|mpv|course|dw|keyboard|claude' <<<"$help" || fail "help output"
+grep -q 'zsh|tmux|btop|nvim|mpv|course|dw|keyboard|claude|privacy' <<<"$help" || fail "help output"
 
 dw_project="$test_home/dw-project"
 printf '%s\n' '{"hostname":"dev.example.test","username":"user","password":"dev-secret","nested":{"password":"nested-secret"}}' > "$dw_project/dw.dev.json"
@@ -605,6 +605,19 @@ CLAUDE_CONFIG_DIR="$claude_home" "$repo_root/install" uninstall claude --yes
 [[ ! -e "$claude_home/CLAUDE.md" && ! -e "$claude_home/bin/lane" ]] || fail "claude uninstall left files"
 if grep -q main_guard "$claude_home/settings.json"; then fail "claude uninstall left hooks"; fi
 grep -q '"mine"' "$claude_home/settings.json" || fail "claude uninstall removed user hooks"
+printf '127.0.0.1 localhost\n' > "$DOTFILES_HOSTS_FILE"
+"$repo_root/install" install privacy --yes
+grep -q '^0.0.0.0 c2s.ic.gov$' "$DOTFILES_HOSTS_FILE" || fail "privacy hosts block missing"
+grep -q 'DISABLE_TELEMETRY=1' "$XDG_CONFIG_HOME/zsh/privacy.zsh" || fail "privacy zsh env missing"
+grep -q 'dotfiles privacy' "$HOME/.zshrc" || fail "privacy zshrc block missing"
+"$repo_root/install" install privacy --yes
+assert_output "$(grep -c '>>> dotfiles privacy' "$DOTFILES_HOSTS_FILE")" 1
+rm -f "$XDG_CONFIG_HOME"/zsh/privacy.zsh.backup.*
+"$repo_root/install" uninstall privacy --yes
+if grep -q 'ic.gov' "$DOTFILES_HOSTS_FILE"; then fail "privacy uninstall left hosts entries"; fi
+grep -q 'localhost' "$DOTFILES_HOSTS_FILE" || fail "privacy uninstall removed user hosts"
+if grep -q 'dotfiles privacy' "$HOME/.zshrc"; then fail "privacy uninstall left zshrc block"; fi
+rm -f "$HOME/.zshrc"
 
 "$repo_root/install" --dry-run
 [[ ! -e "$XDG_CONFIG_HOME" ]] || fail "dry-run changed config"

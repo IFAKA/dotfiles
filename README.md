@@ -22,8 +22,9 @@ dotfiles install mpv
 dotfiles install dw
 dotfiles install keyboard
 dotfiles install claude   # Claude Code setup: CLAUDE.md, agents, rules, skills, lane/hooks
+dotfiles install privacy   # blocks gov-cloud hosts in /etc/hosts (sudo) + telemetry opt-outs in zsh
 dotfiles update [tmux|btop|nvim|mpv]
-dotfiles uninstall [tmux|btop|nvim|mpv|dw|keyboard|claude]
+dotfiles uninstall [tmux|btop|nvim|mpv|dw|keyboard|claude|privacy]
 dotfiles --dry-run
 ```
 
